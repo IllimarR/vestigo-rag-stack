@@ -102,6 +102,12 @@ fabric.properties
 # Claude
 .claude/
 
+# Kilo Code
+.kilocode/
+
+# OpenSpec
+openspec/
+
 # Environment
 .env
 .env.*
