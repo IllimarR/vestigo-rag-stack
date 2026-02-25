@@ -102,6 +102,9 @@ fabric.properties
 # Claude
 .claude/
 
+# GSD Planning
+.planning/
+
 # Kilo Code
 .kilocode/
 
