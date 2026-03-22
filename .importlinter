@@ -21,7 +21,6 @@ modules =
     services.llm
     services.vector_store
     services.audit
-    services.config
     services.api_gateway
     services.admin
 
@@ -33,7 +32,6 @@ source_modules =
     services.retrieval
     services.llm
     services.audit
-    services.config
     services.api_gateway
     services.admin
 forbidden_modules =

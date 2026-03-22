@@ -52,17 +52,36 @@ The system exposes an **OpenAI Chat Completions API-compatible endpoint**, enabl
 
 ## Quick Start
 
+### Development (Phase 1 skeleton)
+
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+
 ```bash
-# Clone the repository
 git clone https://github.com/IllimarR/vestigo-rag-stack
 cd vestigo-rag-stack
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
+cp .env.example .env   # infrastructure-level settings (ports, backend bindings)
 
-# Start the full stack
-docker-compose up -d
+uv sync                # install dependencies into .venv
+uv run python main.py  # boots API Gateway :8000, Ingest API :8001, Admin API :8002
 ```
+
+Verify:
+
+```bash
+curl http://localhost:8000/health   # API Gateway
+curl http://localhost:8001/health   # Ingest API
+curl http://localhost:8002/health   # Admin API
+```
+
+Actual RAG endpoints raise `NotImplementedError` in Phase 1 — the skeleton
+proves only that contracts, placeholders, and wiring import cleanly. See
+[Implementation Phases](docs/phases.md) for what lands when.
+
+### Docker Compose (planned)
+
+A `docker-compose.yml` stack will be provided in a later phase (see
+[Phases](docs/phases.md) and [Requirements](docs/requirements.md)). Until
+then, run the services directly via `uv run python main.py` as above.
 
 Refer to [Requirements & Tech Stack](docs/requirements.md) for detailed setup and configuration guidance.

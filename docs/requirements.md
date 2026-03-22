@@ -31,7 +31,7 @@
 
 ## Tech Stack Preferences
 
-- **Language**: To be decided — finalized in [Phase 1](phases.md#phase-1--foundation-contracts-and-configuration-baseline) before contract signatures are defined (designed to be implementable in any language; contracts are language-agnostic in specification)
+- **Language**: Python 3.12+ — decided in [Phase 1](phases.md#phase-1--foundation-contracts-and-configuration-baseline). Contracts are defined as `typing.Protocol` classes; DTOs as frozen Pydantic v2 models. The specification itself remains language-agnostic so the architecture is re-implementable in another language if needed.
 - **Generation LLM**: OpenAI API-compatible (legacy + current) or Anthropic API-compatible endpoint — configured via [`ConfigProvider`](contracts.md#9-configprovider)
 - **Embedding**: Local models (e.g., sentence-transformers, E5) or via OpenAI-compatible embedding API
 - **Reranking**: Local cross-encoder models or LLM-as-reranker via any supported generation API
@@ -46,7 +46,7 @@
 
 - Monorepo with clear module separation (`/services/ingest`, `/services/retrieval`, `/services/llm`, etc.)
 - Each service has its own Dockerfile
-- Shared contracts defined in a dedicated `/contracts` directory — all modules depend on this, never on each other
+- Shared contracts defined in a dedicated contracts package (`packages/contracts/`, importable as `contracts`) — all modules depend on this, never on each other
 - Configuration: **`.env` files are used for infrastructure-level settings** (database connection, service ports, initial admin credentials, component binding decisions such as which vector store or audit backend to use). All **application-level configuration** — model endpoints, API keys, chunking parameters, RAG prompt templates, model parameters — is stored in the database and managed via the Admin UI through the [`ConfigProvider`](contracts.md#9-configprovider) contract.
 - `docker-compose.yml` to spin up the full stack locally
 - Clear README with architecture diagram description

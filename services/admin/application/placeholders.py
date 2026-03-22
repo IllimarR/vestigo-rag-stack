@@ -1,4 +1,9 @@
-"""Placeholder implementation of ConfigProvider."""
+"""Placeholder implementation of ConfigProvider.
+
+ConfigProvider lives in the Admin service per `docs/architecture.md` §7:
+"All configuration is read and written through the `ConfigProvider` contract."
+The Admin module owns the read/write side of application-level configuration.
+"""
 
 from __future__ import annotations
 

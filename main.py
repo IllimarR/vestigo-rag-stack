@@ -44,8 +44,8 @@ from services.api_gateway.api import create_app as create_gateway_app
 from services.api_gateway.application.rag_pipeline_orchestrator import (
     RAGPipelineOrchestrator,
 )
+from services.admin.application.placeholders import NotImplementedConfigProvider
 from services.audit.application.placeholders import NotImplementedAuditLogger
-from services.config.application.placeholders import NotImplementedConfigProvider
 from services.ingest.api import create_app as create_ingest_app
 from services.ingest.application.placeholders import (
     NotImplementedChunker,
