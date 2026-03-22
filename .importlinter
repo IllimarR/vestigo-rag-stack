@@ -1,0 +1,44 @@
+[importlinter]
+root_packages =
+    contracts
+    services
+include_external_packages = True
+
+[importlinter:contract:contracts-are-sink]
+name = contracts depends on nothing project-owned
+type = forbidden
+source_modules =
+    contracts
+forbidden_modules =
+    services
+
+[importlinter:contract:no-cross-service-imports]
+name = Service modules never import each other
+type = independence
+modules =
+    services.ingest
+    services.retrieval
+    services.llm
+    services.vector_store
+    services.audit
+    services.config
+    services.api_gateway
+    services.admin
+
+[importlinter:contract:vector-store-is-sole-db-access]
+name = Only services.vector_store may touch vector DB drivers
+type = forbidden
+source_modules =
+    services.ingest
+    services.retrieval
+    services.llm
+    services.audit
+    services.config
+    services.api_gateway
+    services.admin
+forbidden_modules =
+    chromadb
+    pgvector
+    psycopg
+    psycopg2
+    sqlalchemy

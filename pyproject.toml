@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vestigo-rag-stack"
+version = "0.1.0"
+description = "Modular, self-hostable RAG service architecture (thesis prototype)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Illimar Reinbusch", email = "illimarr@gmail.com" }]
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "import-linter>=2.1",
+    "ruff>=0.7",
+    "pytest>=8.3",
+    "httpx>=0.28",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/contracts", "services"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "packages:."
+explicit_package_bases = true
+namespace_packages = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["uvicorn.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "UP", "PL"]
+ignore = ["PLR0913"] # allow many constructor args (orchestrator takes 6 contracts)
+
+[tool.pytest.ini_options]
+pythonpath = ["packages", "."]
+testpaths = ["tests"]
