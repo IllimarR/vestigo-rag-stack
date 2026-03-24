@@ -61,12 +61,17 @@ from services.llm.application.placeholders import (
     NotImplementedGenerationProvider,
     NotImplementedReranker,
 )
+from services.vector_store.application.chromadb_vector_store import (
+    ChromaDbVectorStoreRepository,
+)
 from services.vector_store.application.in_memory_vector_store import (
     InMemoryVectorStoreRepository,
 )
 
 DEFAULT_CONFIG_PATH = Path("./config/config.yaml")
 DEFAULT_AUDIT_LOG_PATH = Path("./data/audit.log")
+DEFAULT_CHROMADB_HOST = "localhost"
+DEFAULT_CHROMADB_PORT = 8000
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,33 @@ def _path(env_var: str, default: Path) -> Path:
     return Path(raw) if raw else default
 
 
+def _int(env_var: str, default: int) -> int:
+    raw = os.getenv(env_var)
+    return int(raw) if raw else default
+
+
+def _bool(env_var: str, default: bool = False) -> bool:
+    raw = os.getenv(env_var)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_vector_store() -> VectorStoreRepository:
+    backend = os.getenv("VECTOR_STORE_BACKEND", "in_memory").strip().lower()
+    if backend in ("in_memory", "inmemory", ""):
+        return InMemoryVectorStoreRepository()
+    if backend == "chromadb":
+        return ChromaDbVectorStoreRepository(
+            host=os.getenv("CHROMADB_HOST", DEFAULT_CHROMADB_HOST),
+            port=_int("CHROMADB_PORT", DEFAULT_CHROMADB_PORT),
+            ssl=_bool("CHROMADB_SSL"),
+        )
+    raise ValueError(
+        f"unknown VECTOR_STORE_BACKEND={backend!r}; expected 'in_memory' or 'chromadb'."
+    )
+
+
 def build_container() -> Container:
     """Bind implementations to each contract.
 
@@ -117,7 +149,7 @@ def build_container() -> Container:
         document_converter=NotImplementedDocumentConverter(),
         chunker=NotImplementedChunker(),
         embedding_provider=NotImplementedEmbeddingProvider(),
-        vector_store=InMemoryVectorStoreRepository(),
+        vector_store=_build_vector_store(),
         reranker=NotImplementedReranker(),
         generation_provider=NotImplementedGenerationProvider(),
         audit_logger=FileAuditLogger(audit_log_path),

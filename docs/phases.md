@@ -37,6 +37,11 @@ The solution is implemented in phases that first establish contract boundaries a
 
 - Docker Compose skeleton and per-service Dockerfiles — held until Phase 2 brings a real containerized backend (ChromaDB or pgvector) that needs orchestration. Running the stack in Phase 1 uses `uv run python main.py` directly.
 
+### Phase 2 progress
+
+- ✓ **ChromaDB `VectorStoreRepository`** — server-backed HTTP mode, env-selectable via `VECTOR_STORE_BACKEND=chromadb` + `CHROMADB_HOST`/`CHROMADB_PORT`/`CHROMADB_SSL`. Serializes `Chunk` to JSON in metadata, flattens user metadata for native `where`-clause filtering, translates `MetadataFilter` operators (`contains` is post-filtered in Python).
+
+
 ---
 
 ## Phase 1 — Foundation, Contracts, and Configuration Baseline
