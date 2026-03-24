@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from services.vector_store.application.placeholders import (
-    NotImplementedVectorStoreRepository,
+from services.vector_store.application.in_memory_vector_store import (
+    InMemoryVectorStoreRepository,
 )
 
-__all__ = ["NotImplementedVectorStoreRepository"]
+__all__ = ["InMemoryVectorStoreRepository"]

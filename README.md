@@ -74,9 +74,12 @@ curl http://localhost:8001/health   # Ingest API
 curl http://localhost:8002/health   # Admin API
 ```
 
-Actual RAG endpoints raise `NotImplementedError` in Phase 1 — the skeleton
-proves only that contracts, placeholders, and wiring import cleanly. See
-[Implementation Phases](docs/phases.md) for what lands when.
+Phase 1 delivers functional implementations of three contracts:
+`ConfigProvider` (YAML file at `CONFIG_FILE_PATH`, auto-seeded on first run),
+`AuditLogger` (JSONL at `AUDIT_LOG_FILE`), and `VectorStoreRepository`
+(in-memory cosine similarity — contract-validation stub, not production).
+The remaining six contracts still raise `NotImplementedError` until their
+phase lands. See [Implementation Phases](docs/phases.md) for what lands when.
 
 ### Docker Compose (planned)
 

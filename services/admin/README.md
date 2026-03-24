@@ -6,9 +6,9 @@ through the `ConfigProvider` contract").
 
 ## Contracts owned
 
-| Contract | Protocol | Placeholder |
+| Contract | Protocol | Implementation |
 |---|---|---|
-| `ConfigProvider` | `contracts.ConfigProvider` | `application/placeholders.py::NotImplementedConfigProvider` |
+| `ConfigProvider` | `contracts.ConfigProvider` | `application/file_config_provider.py::FileConfigProvider` (Phase 1 ✓) |
 
 `AuditLogger` is consumed by the Admin API but implemented in `services/audit/`.
 
@@ -17,21 +17,24 @@ through the `ConfigProvider` contract").
 `api.py::create_app(config_provider, audit_logger)` — FastAPI app. Phase 1
 exposes only `/health`.
 
-## Phase 1 status — what is missing
+## Phase 1 status
 
-Application-level:
+- ✓ `FileConfigProvider` — YAML file backend. Reads on every access;
+  writes atomically via temp-file + rename. Auto-seeds a defaults file at
+  `CONFIG_FILE_PATH` on first run so the composition root boots without
+  manual setup. A reference `config/config.yaml.example` lives in the repo.
 
-- File-based `ConfigProvider` reading YAML/JSON (Phase 1 per `docs/phases.md`).
-- Database-backed `ConfigProvider` (Phase 4; seeds from the existing config
-  file on first run).
+## What is still missing
 
-API-level (Phase 4):
+Phase 4:
 
+- Database-backed `ConfigProvider` (replaces the file-based stub; seeds
+  from the existing config file on first run).
 - API key management (create, revoke, list).
 - Model configuration endpoints (embedding, reranking, generation).
-- Chunking configuration.
-- Default collection setting.
-- RAG prompt template management.
+- Chunking configuration endpoint.
+- Default collection setting endpoint.
+- RAG prompt template management endpoint.
 - Audit log querying endpoints.
 - Admin UI frontend (out of scope — this module owns only the API).
 

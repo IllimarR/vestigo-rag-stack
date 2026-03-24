@@ -116,6 +116,13 @@ openspec/
 .env.*
 !.env.example
 
+# Runtime application config & audit log (created by file-based stubs)
+config/*.yaml
+config/*.yml
+config/*.json
+!config/*.example
+data/
+
 # macOS
 .DS_Store
 .AppleDouble

@@ -4,17 +4,20 @@ This is the **only place** that imports concrete implementations. Everything
 else depends on `contracts` alone.
 
 What this file does, in order:
-  1. Load infrastructure-level config from `.env` (ports, backend choices).
-  2. Construct one placeholder instance per contract (Phase 1: all placeholders).
-  3. Type-check that each placeholder satisfies the corresponding `Protocol`
-     — mypy does this at check-time; a runtime `Container` dataclass gives
-     downstream wiring a single handle to pass around.
+  1. Load infrastructure-level config from `.env` (ports, backend choices,
+     file paths for file-based stubs).
+  2. Construct one instance per contract (Phase 1: real file-based
+     ConfigProvider + AuditLogger, real in-memory VectorStoreRepository;
+     everything else still a NotImplementedError placeholder until its
+     phase lands).
+  3. The `Container` dataclass is typed against the `Protocol` classes, so
+     mypy verifies structurally that every binding satisfies its contract.
   4. Construct the `RAGPipelineOrchestrator` with the six relevant contracts.
   5. Build three FastAPI apps (API Gateway, Ingest API, Admin API).
   6. Run all three Uvicorn servers concurrently with `asyncio.gather`.
 
-Phase 2+ will replace placeholder bindings with real adapters — no other file
-needs to change.
+Replacing a binding here is the whole swap protocol — no other file needs
+to change. That is the modularity guarantee in `docs/architecture.md` §2.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
@@ -38,14 +42,14 @@ from contracts import (
     VectorStoreRepository,
 )
 
-# Concrete (placeholder) implementations — imported only here, nowhere else.
+# Concrete implementations — imported only here, nowhere else.
 from services.admin.api import create_app as create_admin_app
+from services.admin.application.file_config_provider import FileConfigProvider
 from services.api_gateway.api import create_app as create_gateway_app
 from services.api_gateway.application.rag_pipeline_orchestrator import (
     RAGPipelineOrchestrator,
 )
-from services.admin.application.placeholders import NotImplementedConfigProvider
-from services.audit.application.placeholders import NotImplementedAuditLogger
+from services.audit.application.file_audit_logger import FileAuditLogger
 from services.ingest.api import create_app as create_ingest_app
 from services.ingest.application.placeholders import (
     NotImplementedChunker,
@@ -57,9 +61,12 @@ from services.llm.application.placeholders import (
     NotImplementedGenerationProvider,
     NotImplementedReranker,
 )
-from services.vector_store.application.placeholders import (
-    NotImplementedVectorStoreRepository,
+from services.vector_store.application.in_memory_vector_store import (
+    InMemoryVectorStoreRepository,
 )
+
+DEFAULT_CONFIG_PATH = Path("./config/config.yaml")
+DEFAULT_AUDIT_LOG_PATH = Path("./data/audit.log")
 
 
 @dataclass(frozen=True)
@@ -67,7 +74,8 @@ class Container:
     """Single handle to all nine contract instances.
 
     Typed against the `Protocol` classes, so mypy verifies that whatever is
-    bound here (placeholder or real) conforms to the contract.
+    bound here conforms to the contract — swap in any implementation and
+    either it satisfies the Protocol structurally or mypy rejects it.
     """
 
     source_connector: SourceConnector
@@ -81,23 +89,39 @@ class Container:
     config_provider: ConfigProvider
 
 
-def build_container() -> Container:
-    """Bind concrete implementations to each contract.
+def _path(env_var: str, default: Path) -> Path:
+    raw = os.getenv(env_var)
+    return Path(raw) if raw else default
 
-    In Phase 1 every binding is a `NotImplementedError`-raising placeholder.
-    Replacing one binding here swaps one implementation — no other file changes.
+
+def build_container() -> Container:
+    """Bind implementations to each contract.
+
+    Phase 1 status:
+      ✓ ConfigProvider    — file-based (YAML)
+      ✓ AuditLogger       — file-based (JSONL)
+      ✓ VectorStoreRepo   — in-memory
+      ✗ SourceConnector   — placeholder (Phase 2)
+      ✗ DocumentConverter — placeholder (Phase 2)
+      ✗ Chunker           — placeholder (Phase 2)
+      ✗ EmbeddingProvider — placeholder (Phase 2)
+      ✗ Reranker          — placeholder (Phase 3)
+      ✗ GenerationProvider — placeholder (Phase 3)
     """
+
+    config_path = _path("CONFIG_FILE_PATH", DEFAULT_CONFIG_PATH)
+    audit_log_path = _path("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG_PATH)
 
     return Container(
         source_connector=NotImplementedSourceConnector(),
         document_converter=NotImplementedDocumentConverter(),
         chunker=NotImplementedChunker(),
         embedding_provider=NotImplementedEmbeddingProvider(),
-        vector_store=NotImplementedVectorStoreRepository(),
+        vector_store=InMemoryVectorStoreRepository(),
         reranker=NotImplementedReranker(),
         generation_provider=NotImplementedGenerationProvider(),
-        audit_logger=NotImplementedAuditLogger(),
-        config_provider=NotImplementedConfigProvider(),
+        audit_logger=FileAuditLogger(audit_log_path),
+        config_provider=FileConfigProvider(config_path),
     )
 
 

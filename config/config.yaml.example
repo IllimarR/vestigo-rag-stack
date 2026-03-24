@@ -1,0 +1,44 @@
+# vestigo-rag-stack — application-level configuration
+#
+# Copy to config.yaml (or whatever CONFIG_FILE_PATH points to) and edit.
+# On first run, FileConfigProvider auto-creates config.yaml with these
+# defaults if the file is missing, so copying this file is optional.
+#
+# Infrastructure-level settings (ports, backend bindings) live in .env.
+
+embedding:
+  endpoint: "http://localhost:11434/v1"
+  api_type: "openai-compatible"
+  model_name: "nomic-embed-text"
+  parameters: {}
+
+reranker:
+  type: "cross_encoder"
+  endpoint: null
+  model_name: "BAAI/bge-reranker-base"
+  parameters: {}
+
+generation:
+  endpoint: "http://localhost:11434/v1"
+  api_type: "openai-compatible"
+  model_name: "llama3"
+  parameters:
+    temperature: 0.2
+    max_tokens: 2048
+
+chunking:
+  method: "recursive"
+  size: 1000
+  overlap: 200
+  parameters: {}
+
+rag_prompt_template: |
+  You are a helpful assistant. Answer the user's question using ONLY
+  the provided context. Cite chunk IDs as [chunk:N] inline.
+
+  Context:
+  {context}
+
+  Question: {question}
+
+default_collection: "default"

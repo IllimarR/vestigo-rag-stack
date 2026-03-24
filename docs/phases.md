@@ -8,6 +8,37 @@ The solution is implemented in phases that first establish contract boundaries a
 
 ---
 
+## Current Status
+
+| # | Phase | State |
+|---|---|---|
+| 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
+| 2 | Ingestion Pipeline MVP | Not started |
+| 3 | Retrieval, Generation, and API Gateway | Not started |
+| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | Not started |
+| 5 | Modularity Proof and Swap Demonstrations | Not started |
+| 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
+
+### Phase 1 delivered
+
+- Python 3.12+ chosen; `pyproject.toml` uses `uv` for environment management.
+- Shared contracts package at `packages/contracts/` — nine `typing.Protocol` classes and frozen Pydantic v2 DTOs.
+- Monorepo service scaffolding mapping 1:1 onto the seven modules in [Architecture](architecture.md).
+- Three external HTTP boundaries (API Gateway :8000, Ingest API :8001, Admin API :8002), each shipping `/health` and OpenAPI docs.
+- [`RAGPipelineOrchestrator`](pipeline.md#rag-pipeline-orchestration) stub depending only on contracts — the reference example for contract-only dependency direction.
+- Composition root (`main.py`) binding real Phase 1 implementations and placeholders for later phases.
+- **[`ConfigProvider`](contracts.md#9-configprovider)** — `FileConfigProvider`, YAML backend, atomic writes, auto-seeded defaults on first run.
+- **[`AuditLogger`](contracts.md#8-auditlogger)** — `FileAuditLogger`, append-only JSONL with filter + pagination `query_logs`.
+- **[`VectorStoreRepository`](contracts.md#5-vectorstorerepository)** — `InMemoryVectorStoreRepository`, cosine similarity in pure Python, full `MetadataFilter` support, collection lifecycle, thread-safe. Contract-validation stub per Phase 1 early validation; also doubles as one side of the modularity swap test once Phase 2 adds a real backend.
+- Six Phase 2/3 contracts (`SourceConnector`, `DocumentConverter`, `Chunker`, `EmbeddingProvider`, `Reranker`, `GenerationProvider`) bound to `NotImplementedError`-raising placeholders with clear messages pointing at which contract needs implementing.
+- Quality gates: `mypy --strict` clean across 45 source files; three `import-linter` contracts enforcing contract isolation, no cross-service imports, and sole DB access via `services.vector_store`; 18-test pytest suite passing (contract imports, DTO frozenness, adapter roundtrips, `/health`, OpenAPI).
+
+### Phase 1 deferred
+
+- Docker Compose skeleton and per-service Dockerfiles — held until Phase 2 brings a real containerized backend (ChromaDB or pgvector) that needs orchestration. Running the stack in Phase 1 uses `uv run python main.py` directly.
+
+---
+
 ## Phase 1 — Foundation, Contracts, and Configuration Baseline
 
 - **Finalize tech stack and implementation language** — prerequisite for defining concrete contract signatures
@@ -21,12 +52,12 @@ The solution is implemented in phases that first establish contract boundaries a
 
 **Exit criteria:**
 
-- Tech stack and language are decided
-- All contracts are defined and consumable from shared modules
-- File-based `ConfigProvider` and `AuditLogger` stubs are functional
-- Services compile/start with stub implementations wired only through contracts
-- Health endpoints are available for each service
-- In-memory vector store validates the `VectorStoreRepository` contract design
+- ✓ Tech stack and language are decided
+- ✓ All contracts are defined and consumable from shared modules
+- ✓ File-based `ConfigProvider` and `AuditLogger` stubs are functional
+- ✓ Services compile/start with stub implementations wired only through contracts
+- ✓ Health endpoints are available for each service
+- ✓ In-memory vector store validates the `VectorStoreRepository` contract design
 
 ---
 
