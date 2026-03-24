@@ -24,7 +24,7 @@ The solution is implemented in phases that first establish contract boundaries a
 - Python 3.12+ chosen; `pyproject.toml` uses `uv` for environment management.
 - Shared contracts package at `packages/contracts/` — nine `typing.Protocol` classes and frozen Pydantic v2 DTOs.
 - Monorepo service scaffolding mapping 1:1 onto the seven modules in [Architecture](architecture.md).
-- Three external HTTP boundaries (API Gateway :8000, Ingest API :8001, Admin API :8002), each shipping `/health` and OpenAPI docs.
+- Three external HTTP boundaries (API Gateway :8000, Admin API :8001, Ingest API :8002), each shipping `/health` and OpenAPI docs.
 - [`RAGPipelineOrchestrator`](pipeline.md#rag-pipeline-orchestration) stub depending only on contracts — the reference example for contract-only dependency direction.
 - Composition root (`main.py`) binding real Phase 1 implementations and placeholders for later phases.
 - **[`ConfigProvider`](contracts.md#9-configprovider)** — `FileConfigProvider`, YAML backend, atomic writes, auto-seeded defaults on first run.

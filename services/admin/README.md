@@ -48,4 +48,4 @@ the next pipeline run (running jobs continue with the previous configuration).
 
 ## Ports
 
-Default: 8002 (see `.env.example::ADMIN_API_PORT`).
+Default: 8001 (see `.env.example::ADMIN_API_PORT`).

@@ -63,15 +63,15 @@ cd vestigo-rag-stack
 cp .env.example .env   # infrastructure-level settings (ports, backend bindings)
 
 uv sync                # install dependencies into .venv
-uv run python main.py  # boots API Gateway :8000, Ingest API :8001, Admin API :8002
+uv run python main.py  # boots API Gateway :8000, Admin API :8001, Ingest API :8002
 ```
 
 Verify:
 
 ```bash
 curl http://localhost:8000/health   # API Gateway
-curl http://localhost:8001/health   # Ingest API
-curl http://localhost:8002/health   # Admin API
+curl http://localhost:8001/health   # Admin API
+curl http://localhost:8002/health   # Ingest API
 ```
 
 Phase 1 delivers functional implementations of three contracts:

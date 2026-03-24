@@ -181,12 +181,12 @@ async def serve_all() -> None:
         ),
         _serve(
             ingest_app,
-            port=_port("INGEST_API_PORT", 8001),
+            port=_port("INGEST_API_PORT", 8002),
             name="Ingest API",
         ),
         _serve(
             admin_app,
-            port=_port("ADMIN_API_PORT", 8002),
+            port=_port("ADMIN_API_PORT", 8001),
             name="Admin API",
         ),
     )
