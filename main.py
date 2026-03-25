@@ -70,8 +70,8 @@ from services.vector_store.application.in_memory_vector_store import (
 
 DEFAULT_CONFIG_PATH = Path("./config/config.yaml")
 DEFAULT_AUDIT_LOG_PATH = Path("./data/audit.log")
-DEFAULT_CHROMADB_HOST = "localhost"
-DEFAULT_CHROMADB_PORT = 8000
+DEFAULT_CHROMADB_HOST = "chromadb"
+DEFAULT_CHROMADB_PORT = 8500
 
 
 @dataclass(frozen=True)
