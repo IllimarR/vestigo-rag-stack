@@ -59,7 +59,7 @@ The system is model-agnostic — swapping any model or provider requires only a 
 
 ### 5. API Gateway
 
-Exposes the full RAG pipeline as an OpenAI Chat Completions API-compatible endpoint.
+Exposes the full RAG pipeline as an OpenAI Responses API-compatible endpoint.
 
 - Enables different frontends (OpenWebUI, custom UI, other clients) to use the service
 - Enforces API key authentication (keys managed via Admin UI)
@@ -115,7 +115,7 @@ This means:
 
 The following boundaries are exposed as real HTTP REST APIs for third-party and cross-system integration:
 
-- **API Gateway** — OpenAI Chat Completions API-compatible endpoint for frontends and clients
+- **API Gateway** — OpenAI Responses API-compatible endpoint for frontends and clients
 - **Ingest API** — allows external systems to push documents into the pipeline (implemented as [`ApiPushSourceConnector`](contracts.md#1-sourceconnector))
 - **Admin API** — configuration, key management, and audit log access
 

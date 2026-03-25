@@ -93,7 +93,7 @@ This phase delivers the complete vertical slice: query-to-answer with client com
 - Implement first [`GenerationProvider`](contracts.md#7-generationprovider) with both non-streaming and streaming paths
 - Implement **[`RAGPipelineOrchestrator`](pipeline.md#rag-pipeline-orchestration)** within the API Gateway: coordinates retrieve → rerank → prompt assembly → generate
 - Implement **[conversation-to-query mapping](pipeline.md#conversation-handling-prototype)**: last user message as retrieval query, full history in generation prompt
-- Implement **OpenAI Chat Completions API-compatible endpoint** in [API Gateway](architecture.md#5-api-gateway)
+- Implement **OpenAI Responses API-compatible endpoint** in [API Gateway](architecture.md#5-api-gateway)
 - Implement **SSE streaming** behavior compatible with OpenAI-style clients
 - Add **basic API key authentication** (hardcoded or file-based keys for now — full management comes in Phase 4)
 - Ensure responses include chunk/source references and relevant metadata
@@ -104,7 +104,7 @@ This phase delivers the complete vertical slice: query-to-answer with client com
 - Query-to-answer pipeline works end-to-end with source-grounded output
 - Metadata filters affect retrieval results correctly
 - Streaming generation functions in the integrated flow
-- External clients can call the gateway as a Chat Completions-compatible API
+- External clients can call the gateway as a Responses-compatible API
 - SSE responses are consumable by OpenAI-compatible frontends
 - Basic authenticated access works
 

@@ -12,7 +12,7 @@ vestigo-rag-stack is a fully on-premise, modular RAG service architecture. Solut
 
 The core design principle: **RAG functionality is separated from the UI into independent, swappable services behind a standardized API.** Each component — ingestion, retrieval, generation, storage — operates behind a formal interface contract and can be replaced independently without affecting the rest of the system.
 
-The system exposes an **OpenAI Chat Completions API-compatible endpoint**, enabling any compatible frontend (OpenWebUI, custom UI, other clients) to use it as a drop-in backend.
+The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any compatible frontend (OpenWebUI, custom UI, other clients) to use it as a drop-in backend.
 
 ---
 

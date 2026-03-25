@@ -1,6 +1,6 @@
 # API Gateway
 
-Owns the OpenAI Chat Completions-compatible public endpoint and the
+Owns the OpenAI Responses-compatible public endpoint and the
 **`RAGPipelineOrchestrator`**.
 
 ## Contracts owned
@@ -21,7 +21,7 @@ not import a single concrete implementation.
 
 ## Phase 1 status — what is missing
 
-- `POST /v1/chat/completions` (Phase 3).
+- `POST /v1/responses` (Phase 3).
 - SSE streaming (Phase 3).
 - API key authentication middleware (Phase 3 basic, Phase 4 full management).
 - Actual orchestration logic in `RAGPipelineOrchestrator.run` / `run_stream`

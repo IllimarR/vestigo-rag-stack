@@ -1,1 +1,1 @@
-"""API Gateway — OpenAI Chat Completions-compatible endpoint + RAG orchestrator."""
+"""API Gateway — OpenAI Responses-compatible endpoint + RAG orchestrator."""

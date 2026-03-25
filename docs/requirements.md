@@ -22,7 +22,7 @@
 2. Responses contain source references and metadata
 3. Metadata filters work (document type, date, tags)
 4. Components are independently replaceable — proven by contract isolation and implementation swap tests (see [Modularity Proof Criteria](architecture.md#modularity-proof-criteria))
-5. API Gateway is OpenAI Chat Completions API-compatible, supports streaming (SSE), and works with external clients
+5. API Gateway is OpenAI Responses API-compatible, supports streaming (SSE), and works with external clients
 6. All components are self-hostable — no SaaS dependency required
 7. Health check endpoints respond correctly for all services
 8. Dependency diagram confirms all dependencies point toward contracts, never between implementations

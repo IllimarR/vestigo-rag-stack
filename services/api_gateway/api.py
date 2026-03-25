@@ -1,8 +1,8 @@
 """Public HTTP surface for the API Gateway.
 
 Phase 1 exposes `/health` and OpenAPI docs. Phase 3 will add the OpenAI
-Chat Completions-compatible endpoint (`POST /v1/chat/completions`) with
-both non-streaming and SSE streaming responses, plus API key auth.
+Responses-compatible endpoint (`POST /v1/responses`) with both
+non-streaming and SSE streaming responses, plus API key auth.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ def create_app(orchestrator: RAGPipelineOrchestrator) -> FastAPI:
         title="Vestigo API Gateway",
         version="0.1.0",
         description=(
-            "OpenAI Chat Completions-compatible endpoint. Routes requests "
+            "OpenAI Responses-compatible endpoint. Routes requests "
             "through the RAGPipelineOrchestrator: embed → retrieve → rerank "
             "→ generate. Phase 1 exposes /health only."
         ),

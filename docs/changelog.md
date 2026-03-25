@@ -14,7 +14,7 @@ Changes from v1 → v2:
 | [ConfigProvider](contracts.md#9-configprovider) scope | Documented two-tier config: `ConfigProvider` for application-level, `.env`/Docker for infrastructure-level | Avoids false expectation that all contracts are config-driven at application level |
 | Ingest API | Defined as [`ApiPushSourceConnector`](contracts.md#1-sourceconnector) implementing `SourceConnector` contract | Preserves contract isolation — Ingest API does not bypass the abstraction |
 | [Pipeline orchestration](pipeline.md#rag-pipeline-orchestration) | Added explicit `RAGPipelineOrchestrator` within API Gateway | Eliminates ambiguity about who coordinates retrieve → rerank → prompt → generate |
-| [Conversation handling](pipeline.md#conversation-handling-prototype) | Defined conversation-to-query mapping (last user message = retrieval query) | Addresses gap between Chat Completions format and single-query retrieval |
+| [Conversation handling](pipeline.md#conversation-handling-prototype) | Defined conversation-to-query mapping (last user message = retrieval query) | Addresses gap between Responses format and single-query retrieval |
 | Collection targeting | Added `get/set_default_collection` to `ConfigProvider`; collection override in API requests | Clarifies how retrieval queries target the right collection |
 | [`RerankedChunk`](contracts.md#6-reranker) type | Introduced `RerankedChunk` with separate `rerank_score` field | Avoids conflating vector similarity scores with reranker relevance scores |
 | [`AuditLogger`](contracts.md#8-auditlogger) status | Added `status` and optional `error_message` fields to `log_query` and `log_ingest_event` | Enables logging of failed/partial query cycles and skipped files |
