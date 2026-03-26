@@ -17,6 +17,8 @@ dependencies = [
     "pydantic>=2.9",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
+    "chromadb>=0.5",
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
@@ -59,6 +61,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "B", "UP", "PL"]
 ignore = ["PLR0913"] # allow many constructor args (orchestrator takes 6 contracts)
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004", "PLC0415"] # magic values and late imports are fine in tests
 
 [tool.pytest.ini_options]
 pythonpath = ["packages", "."]

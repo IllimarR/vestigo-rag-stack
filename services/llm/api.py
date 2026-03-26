@@ -7,6 +7,9 @@ exposes implementations of `EmbeddingProvider`, `Reranker`, and
 
 from __future__ import annotations
 
+from services.llm.application.openai_http_embedding_provider import (
+    OpenAIHttpEmbeddingProvider,
+)
 from services.llm.application.placeholders import (
     NotImplementedEmbeddingProvider,
     NotImplementedGenerationProvider,
@@ -17,4 +20,5 @@ __all__ = [
     "NotImplementedEmbeddingProvider",
     "NotImplementedGenerationProvider",
     "NotImplementedReranker",
+    "OpenAIHttpEmbeddingProvider",
 ]
