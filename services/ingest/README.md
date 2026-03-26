@@ -5,7 +5,7 @@
 | Contract | Protocol | Implementation |
 |---|---|---|
 | `SourceConnector` | `contracts.SourceConnector` | `application/filesystem_source_connector.py::FilesystemSourceConnector` (Phase 2 ✓) |
-| `DocumentConverter` | `contracts.DocumentConverter` | `application/placeholders.py::NotImplementedDocumentConverter` |
+| `DocumentConverter` | `contracts.DocumentConverter` | `application/markitdown_document_converter.py::MarkitdownDocumentConverter` (Phase 2 ✓) |
 | `Chunker` | `contracts.Chunker` | `application/recursive_chunker.py::RecursiveChunker` (Phase 2 ✓) |
 
 ## Public surface
@@ -34,6 +34,21 @@ rather than bypassing it.
 - Composition root dispatches this adapter when `SOURCE_CONNECTORS`
   contains `filesystem`.
 
+### `MarkitdownDocumentConverter` (Phase 2)
+
+- Delegates to Microsoft's `markitdown` library to produce Markdown
+  from PDF, DOCX, PPTX, XLSX, HTML, CSV, JSON, XML, plain text, and a
+  handful of other office formats.
+- Writes `RawDocument.content` to a temporary file because
+  `MarkItDown.convert` keys off the extension for some converters;
+  the temp file is cleaned up regardless of success.
+- `supported_types()` returns a conservative whitelist — anything not
+  on it raises `UnsupportedFileTypeError`, which the ingest
+  orchestrator catches to skip-and-log the file instead of crashing
+  the pipeline.
+- Composition root dispatches this adapter when `DOCUMENT_CONVERTER`
+  is `markitdown`.
+
 ### `RecursiveChunker` (Phase 2)
 
 - Boundary-aware character chunker. Sliding window with lookahead for natural
@@ -53,10 +68,11 @@ rather than bypassing it.
   registered connector via `_CONNECTORS`. Current entries: `filesystem`.
   The harness abstracts write/delete so future connectors (SharePoint,
   DMS, etc.) reuse every assertion.
+- `tests/test_document_converter_contracts.py` — parameterized over every
+  registered converter via `_CONVERTERS`. Current entries: `markitdown`.
 
 ## Phase 2 status — what is still missing
 
-- Concrete `DocumentConverter` (e.g. markitdown, Pandoc).
 - Ingest orchestrator wiring `SourceConnector.detect_changes → convert →
   chunk → embed → store`.
 - Skip-and-log for unsupported file types.

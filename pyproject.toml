@@ -19,6 +19,7 @@ dependencies = [
     "pyyaml>=6.0",
     "chromadb>=0.5",
     "httpx>=0.28",
+    "markitdown>=0.0.1",
 ]
 
 [dependency-groups]
