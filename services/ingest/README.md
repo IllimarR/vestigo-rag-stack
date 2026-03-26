@@ -4,7 +4,7 @@
 
 | Contract | Protocol | Implementation |
 |---|---|---|
-| `SourceConnector` | `contracts.SourceConnector` | `application/placeholders.py::NotImplementedSourceConnector` |
+| `SourceConnector` | `contracts.SourceConnector` | `application/filesystem_source_connector.py::FilesystemSourceConnector` (Phase 2 ✓) |
 | `DocumentConverter` | `contracts.DocumentConverter` | `application/placeholders.py::NotImplementedDocumentConverter` |
 | `Chunker` | `contracts.Chunker` | `application/recursive_chunker.py::RecursiveChunker` (Phase 2 ✓) |
 
@@ -19,6 +19,21 @@ rather than bypassing it.
 
 ## Implementations
 
+### `FilesystemSourceConnector` (Phase 2)
+
+- Recursive scan of a configured root directory. The path relative to the
+  root is the `document_id`; mtime drives `last_modified`.
+- `detect_changes(since)` diffs the current scan against an in-memory
+  snapshot from the previous call and emits ADDED / MODIFIED / DELETED
+  `ChangeEvent`s. ADDED and MODIFIED additionally honour the `since`
+  watermark (deletions are always reported).
+- `fetch_document` reads file bytes; `file_type` is the lower-cased file
+  extension (no leading dot).
+- `source_id` is constructor-configurable so multiple filesystem
+  connectors can coexist in one deployment with distinct ids.
+- Composition root dispatches this adapter when `SOURCE_CONNECTORS`
+  contains `filesystem`.
+
 ### `RecursiveChunker` (Phase 2)
 
 - Boundary-aware character chunker. Sliding window with lookahead for natural
@@ -32,13 +47,15 @@ rather than bypassing it.
 
 ## Contract compliance
 
-`tests/test_chunker_contracts.py` — parameterized over every registered
-chunker. Current backends: `recursive`. A second method (`semantic`,
-markdown-heading-aware, …) plugs in by adding the factory to `_CHUNKERS`.
+- `tests/test_chunker_contracts.py` — parameterized over every registered
+  chunker via `_CHUNKERS`. Current entries: `recursive`.
+- `tests/test_source_connector_contracts.py` — parameterized over every
+  registered connector via `_CONNECTORS`. Current entries: `filesystem`.
+  The harness abstracts write/delete so future connectors (SharePoint,
+  DMS, etc.) reuse every assertion.
 
 ## Phase 2 status — what is still missing
 
-- Concrete `SourceConnector` implementation (filesystem watcher).
 - Concrete `DocumentConverter` (e.g. markitdown, Pandoc).
 - Ingest orchestrator wiring `SourceConnector.detect_changes → convert →
   chunk → embed → store`.
