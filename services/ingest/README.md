@@ -34,6 +34,26 @@ rather than bypassing it.
 - Composition root dispatches this adapter when `SOURCE_CONNECTORS`
   contains `filesystem`.
 
+### `IngestPipelineOrchestrator` (Phase 2)
+
+- Applies a batch of `ChangeEvent`s to the vector store per
+  `docs/pipeline.md` §Document Lifecycle:
+  - **ADDED**: fetch → convert → chunk → embed → store, log INGESTED.
+  - **MODIFIED**: delete_by_document → fetch → convert → chunk → embed →
+    store, log UPDATED. (Delete-then-store is non-atomic — see
+    `docs/pipeline.md` §Non-Atomic Update Caveat.)
+  - **DELETED**: delete_by_document, log DELETED.
+- Skip-and-log behaviour: unsupported file types, empty Markdown, and
+  any per-document exception are caught and surfaced as
+  `IngestEventType.SKIPPED` audit entries with `error_message`. A bad
+  document never stalls the rest of the batch.
+- Returns an `IngestResult` (counts of ingested / updated / deleted /
+  skipped / failed) so callers can report what happened.
+- Depends only on Protocols (`SourceConnector`, `DocumentConverter`,
+  `Chunker`, `EmbeddingProvider`, `VectorStoreRepository`,
+  `ConfigProvider`, `AuditLogger`); swapping any stage is a composition
+  root concern.
+
 ### `MarkitdownDocumentConverter` (Phase 2)
 
 - Delegates to Microsoft's `markitdown` library to produce Markdown
@@ -70,12 +90,13 @@ rather than bypassing it.
   DMS, etc.) reuse every assertion.
 - `tests/test_document_converter_contracts.py` — parameterized over every
   registered converter via `_CONVERTERS`. Current entries: `markitdown`.
+- `tests/test_ingest_pipeline_orchestrator.py` — orchestrator behaviour
+  against in-test fake adapters: ADDED/MODIFIED/DELETED flows, batch
+  continuity after failure, empty-Markdown skip, unsupported-type skip,
+  and accumulated `IngestResult` counts.
 
 ## Phase 2 status — what is still missing
 
-- Ingest orchestrator wiring `SourceConnector.detect_changes → convert →
-  chunk → embed → store`.
-- Skip-and-log for unsupported file types.
 - HTTP routes materializing the `ApiPushSourceConnector` (Phase 4).
 
 ## Private packages
