@@ -13,7 +13,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | # | Phase | State |
 |---|---|---|
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
-| 2 | Ingestion Pipeline MVP | Not started |
+| 2 | Ingestion Pipeline MVP | 🔄 **In progress** — ChromaDB, RecursiveChunker, OpenAI-compatible embeddings landed |
 | 3 | Retrieval, Generation, and API Gateway | Not started |
 | 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | Not started |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
@@ -40,7 +40,11 @@ The solution is implemented in phases that first establish contract boundaries a
 ### Phase 2 progress
 
 - ✓ **ChromaDB `VectorStoreRepository`** — server-backed HTTP mode, env-selectable via `VECTOR_STORE_BACKEND=chromadb` + `CHROMADB_HOST`/`CHROMADB_PORT`/`CHROMADB_SSL`. Serializes `Chunk` to JSON in metadata, flattens user metadata for native `where`-clause filtering, translates `MetadataFilter` operators (`contains` is post-filtered in Python).
-
+- ✓ **`RecursiveChunker`** — boundary-aware sliding window over Markdown. Prefers paragraph > line > sentence > word separators within a ~25% lookback of the hard cap. `Chunk.start` / `Chunk.end` reference positions in the original text; overlap is a natural consequence of start offset, not text duplication. Bound when `ConfigProvider.get_chunking_config().method == "recursive"`.
+- ✓ **`OpenAIHttpEmbeddingProvider`** — speaks the OpenAI `/v1/embeddings` shape. Works with OpenAI itself, Ollama, LM Studio, LocalAI, vLLM, and similar. Lazy dimension discovery, optional Bearer auth, injectable `httpx.Client` for testing. Bound when `ConfigProvider.get_embedding_config().api_type == "openai-compatible"`.
+- ✓ **Contract compliance suites** — parameterized tests across backends: 17 × N for vector store (`test_vector_store_contracts.py`), 13 × N for chunker (`test_chunker_contracts.py`), 12 × N for embedding provider (`test_embedding_provider_contracts.py`). New backends plug into each `_BACKENDS` / `_CHUNKERS` / `_PROVIDERS` dict and the whole suite re-runs free.
+- ✓ **Composition root dispatch** — application-level contracts (`Chunker`, `EmbeddingProvider`) dispatch on `ConfigProvider` values per `docs/architecture.md` §Modularity Proof §4; infrastructure-level contracts (`VectorStoreRepository`) dispatch on `.env`.
+- Remaining: `SourceConnector` (filesystem), `DocumentConverter`, ingest orchestration, skip-and-log for unsupported types. Optional Phase 2 add-on: second `EmbeddingProvider` (local sentence-transformers) for the swap-test evidence.
 
 ---
 

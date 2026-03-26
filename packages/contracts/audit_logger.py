@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol
 
 from contracts.dto import DocumentReference, RerankedChunk, TokenUsage
@@ -11,13 +11,13 @@ from contracts.dto import DocumentReference, RerankedChunk, TokenUsage
 __all__ = ["AuditLogger", "IngestEventType", "QueryStatus"]
 
 
-class QueryStatus(str, Enum):
+class QueryStatus(StrEnum):
     SUCCESS = "success"
     PARTIAL = "partial"
     FAILED = "failed"
 
 
-class IngestEventType(str, Enum):
+class IngestEventType(StrEnum):
     INGESTED = "ingested"
     UPDATED = "updated"
     DELETED = "deleted"

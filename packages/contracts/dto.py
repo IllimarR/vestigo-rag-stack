@@ -7,7 +7,7 @@ to pass across module boundaries, and cannot be mutated by consumers.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -54,7 +54,7 @@ class DocumentReference(_FrozenModel):
     source_url: str | None = None
 
 
-class ChangeType(str, Enum):
+class ChangeType(StrEnum):
     ADDED = "added"
     MODIFIED = "modified"
     DELETED = "deleted"
@@ -115,7 +115,7 @@ class RerankedChunk(_FrozenModel):
 # --- Generation ---------------------------------------------------------------
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"

@@ -28,19 +28,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import uvicorn
-from dotenv import load_dotenv
-
 from contracts import (
     AuditLogger,
+    ChunkConfig,
     Chunker,
     ConfigProvider,
     DocumentConverter,
+    EmbeddingConfig,
     EmbeddingProvider,
     GenerationProvider,
     Reranker,
     SourceConnector,
     VectorStoreRepository,
 )
+from dotenv import load_dotenv
 
 # Concrete implementations — imported only here, nowhere else.
 from services.admin.api import create_app as create_admin_app
@@ -55,6 +56,10 @@ from services.ingest.application.placeholders import (
     NotImplementedChunker,
     NotImplementedDocumentConverter,
     NotImplementedSourceConnector,
+)
+from services.ingest.application.recursive_chunker import RecursiveChunker
+from services.llm.application.openai_http_embedding_provider import (
+    OpenAIHttpEmbeddingProvider,
 )
 from services.llm.application.placeholders import (
     NotImplementedEmbeddingProvider,
@@ -126,34 +131,78 @@ def _build_vector_store() -> VectorStoreRepository:
     )
 
 
+def _build_chunker(chunk_config: ChunkConfig) -> Chunker:
+    """Dispatch on `ChunkConfig.method` per architecture.md §Modularity Proof §4."""
+    method = chunk_config.method.strip().lower()
+    if method == "recursive":
+        return RecursiveChunker()
+    if method in ("placeholder", "none", ""):
+        return NotImplementedChunker()
+    raise ValueError(
+        f"unsupported chunking method={method!r}; available: 'recursive'. "
+        "Add a new `Chunker` implementation under services/ingest/application/."
+    )
+
+
+def _build_embedding_provider(embedding_config: EmbeddingConfig) -> EmbeddingProvider:
+    """Dispatch on `EmbeddingConfig.api_type` per architecture.md §Modularity Proof §4."""
+    api_type = embedding_config.api_type.strip().lower()
+    if api_type in ("openai", "openai-compatible", "openai_compatible"):
+        api_key = None
+        params = embedding_config.parameters or {}
+        maybe_key = params.get("api_key")
+        if isinstance(maybe_key, str) and maybe_key:
+            api_key = maybe_key
+        return OpenAIHttpEmbeddingProvider(
+            endpoint=embedding_config.endpoint,
+            model_name=embedding_config.model_name,
+            api_key=api_key,
+        )
+    if api_type in ("placeholder", "none", ""):
+        return NotImplementedEmbeddingProvider()
+    raise ValueError(
+        f"unsupported embedding api_type={api_type!r}; available: 'openai-compatible'. "
+        "Add a new `EmbeddingProvider` implementation under services/llm/application/."
+    )
+
+
 def build_container() -> Container:
     """Bind implementations to each contract.
 
-    Phase 1 status:
-      ✓ ConfigProvider    — file-based (YAML)
-      ✓ AuditLogger       — file-based (JSONL)
-      ✓ VectorStoreRepo   — in-memory
-      ✗ SourceConnector   — placeholder (Phase 2)
-      ✗ DocumentConverter — placeholder (Phase 2)
-      ✗ Chunker           — placeholder (Phase 2)
-      ✗ EmbeddingProvider — placeholder (Phase 2)
-      ✗ Reranker          — placeholder (Phase 3)
-      ✗ GenerationProvider — placeholder (Phase 3)
+    Application-level contracts (`Chunker`, `EmbeddingProvider`, ...) dispatch
+    on values read from `ConfigProvider` per `docs/architecture.md`
+    §Modularity Proof §4. Infrastructure-level contracts (vector store
+    backend) dispatch on `.env` values.
+
+    Current status:
+      ✓ ConfigProvider       — file-based (YAML)
+      ✓ AuditLogger          — file-based (JSONL)
+      ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
+      ✓ Chunker              — recursive (ConfigProvider method dispatch)
+      ✓ EmbeddingProvider    — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
+      ✗ SourceConnector      — placeholder (Phase 2 remaining)
+      ✗ DocumentConverter    — placeholder (Phase 2 remaining)
+      ✗ Reranker             — placeholder (Phase 3)
+      ✗ GenerationProvider   — placeholder (Phase 3)
     """
 
     config_path = _path("CONFIG_FILE_PATH", DEFAULT_CONFIG_PATH)
     audit_log_path = _path("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG_PATH)
 
+    config_provider = FileConfigProvider(config_path)
+    chunking = config_provider.get_chunking_config()
+    embedding = config_provider.get_embedding_config()
+
     return Container(
         source_connector=NotImplementedSourceConnector(),
         document_converter=NotImplementedDocumentConverter(),
-        chunker=NotImplementedChunker(),
-        embedding_provider=NotImplementedEmbeddingProvider(),
+        chunker=_build_chunker(chunking),
+        embedding_provider=_build_embedding_provider(embedding),
         vector_store=_build_vector_store(),
         reranker=NotImplementedReranker(),
         generation_provider=NotImplementedGenerationProvider(),
         audit_logger=FileAuditLogger(audit_log_path),
-        config_provider=FileConfigProvider(config_path),
+        config_provider=config_provider,
     )
 
 

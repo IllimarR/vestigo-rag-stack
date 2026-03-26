@@ -118,10 +118,10 @@ class FileAuditLogger:
         with self._lock:
             with self._path.open("r", encoding="utf-8") as f:
                 for raw in f:
-                    raw = raw.strip()
-                    if not raw:
+                    line = raw.strip()
+                    if not line:
                         continue
-                    entry: dict[str, Any] = json.loads(raw)
+                    entry: dict[str, Any] = json.loads(line)
                     if _matches(entry, filters):
                         results.append(entry)
         return results[offset : offset + limit]

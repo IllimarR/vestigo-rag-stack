@@ -174,29 +174,50 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (math.sqrt(norm_a) * math.sqrt(norm_b))
 
 
+def _op_eq(value: Any, expected: Any) -> bool:
+    return bool(value == expected)
+
+
+def _op_ne(value: Any, expected: Any) -> bool:
+    return bool(value != expected)
+
+
+def _op_in(value: Any, expected: Any) -> bool:
+    return value in expected
+
+
+def _op_contains(value: Any, expected: Any) -> bool:
+    return isinstance(value, str) and expected in value
+
+
+def _op_gte(value: Any, expected: Any) -> bool:
+    return value is not None and value >= expected
+
+
+def _op_lte(value: Any, expected: Any) -> bool:
+    return value is not None and value <= expected
+
+
+def _op_range(value: Any, expected: Any) -> bool:
+    low, high = expected
+    return value is not None and low <= value <= high
+
+
+_OPS: dict[str, Any] = {
+    "eq": _op_eq,
+    "ne": _op_ne,
+    "in": _op_in,
+    "contains": _op_contains,
+    "gte": _op_gte,
+    "lte": _op_lte,
+    "range": _op_range,
+}
+
+
 def _matches_filters(chunk: Chunk, filters: list[MetadataFilter]) -> bool:
     for f in filters:
         value = chunk.metadata.get(f.field)
-        if f.op == "eq":
-            if value != f.value:
-                return False
-        elif f.op == "ne":
-            if value == f.value:
-                return False
-        elif f.op == "in":
-            if value not in f.value:
-                return False
-        elif f.op == "contains":
-            if not isinstance(value, str) or f.value not in value:
-                return False
-        elif f.op == "gte":
-            if value is None or value < f.value:
-                return False
-        elif f.op == "lte":
-            if value is None or value > f.value:
-                return False
-        elif f.op == "range":
-            low, high = f.value
-            if value is None or value < low or value > high:
-                return False
+        predicate = _OPS[f.op]
+        if not predicate(value, f.value):
+            return False
     return True

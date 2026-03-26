@@ -17,12 +17,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
-
 from contracts import (
     AuditLogger,
     ChatMessage,
-    Chunk,
     ChunkConfig,
     Chunker,
     ConfigProvider,
@@ -33,7 +30,6 @@ from contracts import (
     GenerationConfig,
     GenerationProvider,
     IngestEventType,
-    MetadataFilter,
     QueryStatus,
     Reranker,
     RerankerConfig,
@@ -42,6 +38,9 @@ from contracts import (
     TokenUsage,
     VectorStoreRepository,
 )
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
 from main import Container, build_container, build_orchestrator
 from services.admin.api import create_app as create_admin_app
 from services.admin.application.file_config_provider import (
@@ -51,10 +50,13 @@ from services.admin.application.file_config_provider import (
 from services.api_gateway.api import create_app as create_gateway_app
 from services.audit.application.file_audit_logger import FileAuditLogger
 from services.ingest.api import create_app as create_ingest_app
+from services.ingest.application.recursive_chunker import RecursiveChunker
+from services.llm.application.openai_http_embedding_provider import (
+    OpenAIHttpEmbeddingProvider,
+)
 from services.vector_store.application.in_memory_vector_store import (
     InMemoryVectorStoreRepository,
 )
-
 
 # --- Contract + DTO smoke ----------------------------------------------------
 
@@ -78,7 +80,7 @@ def test_dtos_are_frozen() -> None:
     ref = DocumentReference(
         source_id="s", document_id="d", filename="f.md", last_modified=datetime.now()
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ref.filename = "other.md"
 
 
@@ -88,23 +90,12 @@ def test_dtos_are_frozen() -> None:
 def test_placeholders_raise_not_implemented(tmp_path: Path) -> None:
     container = _container_in(tmp_path)
 
+    # Still placeholder at this point in Phase 2.
     with pytest.raises(NotImplementedError, match="SourceConnector"):
         container.source_connector.get_source_id()
     with pytest.raises(NotImplementedError, match="DocumentConverter"):
         container.document_converter.supported_types()
-    with pytest.raises(NotImplementedError, match="Chunker"):
-        container.chunker.chunk(
-            "x",
-            DocumentReference(
-                source_id="s",
-                document_id="d",
-                filename="f",
-                last_modified=datetime.now(),
-            ),
-            ChunkConfig(method="recursive", size=1, overlap=0),
-        )
-    with pytest.raises(NotImplementedError, match="EmbeddingProvider"):
-        container.embedding_provider.get_dimension()
+    # Phase 3.
     with pytest.raises(NotImplementedError, match="Reranker"):
         container.reranker.get_model_id()
     with pytest.raises(NotImplementedError, match="GenerationProvider"):
@@ -202,103 +193,8 @@ def test_file_audit_logger_roundtrip(tmp_path: Path) -> None:
     assert len(key_filter) == 1
 
 
-# --- InMemoryVectorStoreRepository ------------------------------------------
-
-
-def _chunk(doc_id: str, source_id: str = "src", **metadata: object) -> Chunk:
-    return Chunk(
-        text=f"chunk for {doc_id}",
-        index=0,
-        start=0,
-        end=10,
-        parent=DocumentReference(
-            source_id=source_id,
-            document_id=doc_id,
-            filename=f"{doc_id}.md",
-            last_modified=datetime.now(),
-        ),
-        metadata=dict(metadata),
-    )
-
-
-def test_in_memory_vector_store_create_store_query() -> None:
-    store = InMemoryVectorStoreRepository()
-    store.create_collection("kb", dimension=3)
-
-    store.store_chunks(
-        [
-            (_chunk("A", tag="x"), [1.0, 0.0, 0.0]),
-            (_chunk("B", tag="y"), [0.9, 0.1, 0.0]),
-            (_chunk("C", tag="x"), [0.0, 1.0, 0.0]),
-        ],
-        collection="kb",
-    )
-
-    results = store.query_similar([1.0, 0.0, 0.0], top_k=2, collection="kb")
-    assert [r.chunk.parent.document_id for r in results] == ["A", "B"]
-    assert results[0].similarity_score == pytest.approx(1.0)
-
-
-def test_in_memory_vector_store_metadata_filter() -> None:
-    store = InMemoryVectorStoreRepository()
-    store.create_collection("kb", dimension=3)
-    store.store_chunks(
-        [
-            (_chunk("A", tag="x"), [1.0, 0.0, 0.0]),
-            (_chunk("B", tag="y"), [0.9, 0.1, 0.0]),
-        ],
-        collection="kb",
-    )
-
-    results = store.query_similar(
-        [1.0, 0.0, 0.0],
-        top_k=5,
-        collection="kb",
-        filters=[MetadataFilter(field="tag", op="eq", value="y")],
-    )
-    assert [r.chunk.parent.document_id for r in results] == ["B"]
-
-
-def test_in_memory_vector_store_delete_by_document() -> None:
-    store = InMemoryVectorStoreRepository()
-    store.create_collection("kb", dimension=2)
-    store.store_chunks(
-        [
-            (_chunk("A"), [1.0, 0.0]),
-            (_chunk("B"), [0.0, 1.0]),
-        ],
-        collection="kb",
-    )
-    removed = store.delete_by_document("A", "kb")
-    assert removed == 1
-    assert len(store.query_similar([1.0, 0.0], top_k=5, collection="kb")) == 1
-
-
-def test_in_memory_vector_store_delete_by_source() -> None:
-    store = InMemoryVectorStoreRepository()
-    store.create_collection("kb", dimension=2)
-    store.store_chunks(
-        [
-            (_chunk("A", source_id="fs"), [1.0, 0.0]),
-            (_chunk("B", source_id="api"), [0.0, 1.0]),
-        ],
-        collection="kb",
-    )
-    assert store.delete_by_source("fs", "kb") == 1
-    remaining = store.query_similar([0.0, 1.0], top_k=5, collection="kb")
-    assert [r.chunk.parent.source_id for r in remaining] == ["api"]
-
-
-def test_in_memory_vector_store_health_is_healthy() -> None:
-    store = InMemoryVectorStoreRepository()
-    assert store.health_check().healthy is True
-
-
-def test_in_memory_vector_store_rejects_dimension_mismatch() -> None:
-    store = InMemoryVectorStoreRepository()
-    store.create_collection("kb", dimension=3)
-    with pytest.raises(ValueError, match="dimension"):
-        store.store_chunks([(_chunk("A"), [1.0, 2.0])], collection="kb")
+# Per-backend `VectorStoreRepository` behavior is covered in
+# `tests/test_vector_store_contracts.py` (parameterized over every backend).
 
 
 # --- Container + orchestrator ------------------------------------------------
@@ -311,15 +207,21 @@ def _container_in(tmp_path: Path) -> Container:
 
     _os.environ["CONFIG_FILE_PATH"] = str(tmp_path / "config.yaml")
     _os.environ["AUDIT_LOG_FILE"] = str(tmp_path / "audit.log")
+    # Smoke tests assert the default (in-memory) binding. Contract tests in
+    # tests/test_vector_store_contracts.py cover chromadb explicitly.
+    _os.environ["VECTOR_STORE_BACKEND"] = "in_memory"
     return build_container()
 
 
-def test_container_builds_with_real_phase_1_bindings(tmp_path: Path) -> None:
+def test_container_builds_with_real_bindings(tmp_path: Path) -> None:
     container = _container_in(tmp_path)
-    # Real implementations where Phase 1 delivered them.
+    # Phase 1 bindings.
     assert isinstance(container.config_provider, FileConfigProvider)
     assert isinstance(container.audit_logger, FileAuditLogger)
     assert isinstance(container.vector_store, InMemoryVectorStoreRepository)
+    # Phase 2 bindings (dispatch from the seeded default config).
+    assert isinstance(container.chunker, RecursiveChunker)
+    assert isinstance(container.embedding_provider, OpenAIHttpEmbeddingProvider)
 
 
 def test_orchestrator_still_stub(tmp_path: Path) -> None:

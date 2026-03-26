@@ -7,9 +7,8 @@ RAG prompt template management, and audit log querying.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-
 from contracts import AuditLogger, ConfigProvider
+from fastapi import FastAPI
 
 __all__ = ["create_app"]
 

@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
 from contracts import (
     ChunkConfig,
     EmbeddingConfig,

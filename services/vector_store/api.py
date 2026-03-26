@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from services.vector_store.application.chromadb_vector_store import (
+    ChromaDbVectorStoreRepository,
+)
 from services.vector_store.application.in_memory_vector_store import (
     InMemoryVectorStoreRepository,
 )
 
-__all__ = ["InMemoryVectorStoreRepository"]
+__all__ = [
+    "ChromaDbVectorStoreRepository",
+    "InMemoryVectorStoreRepository",
+]
