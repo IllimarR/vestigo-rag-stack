@@ -12,7 +12,8 @@ What this file does, in order:
      phase lands).
   3. The `Container` dataclass is typed against the `Protocol` classes, so
      mypy verifies structurally that every binding satisfies its contract.
-  4. Construct the `RAGPipelineOrchestrator` with the six relevant contracts.
+  4. Construct the `RAGPipelineOrchestrator` (query flow, six contracts)
+     and the `IngestPipelineOrchestrator` (ingest flow, seven contracts).
   5. Build three FastAPI apps (API Gateway, Ingest API, Admin API).
   6. Run all three Uvicorn servers concurrently with `asyncio.gather`.
 
@@ -52,6 +53,15 @@ from services.api_gateway.application.rag_pipeline_orchestrator import (
 )
 from services.audit.application.file_audit_logger import FileAuditLogger
 from services.ingest.api import create_app as create_ingest_app
+from services.ingest.application.filesystem_source_connector import (
+    FilesystemSourceConnector,
+)
+from services.ingest.application.ingest_pipeline_orchestrator import (
+    IngestPipelineOrchestrator,
+)
+from services.ingest.application.markitdown_document_converter import (
+    MarkitdownDocumentConverter,
+)
 from services.ingest.application.placeholders import (
     NotImplementedChunker,
     NotImplementedDocumentConverter,
@@ -77,6 +87,7 @@ DEFAULT_CONFIG_PATH = Path("./config/config.yaml")
 DEFAULT_AUDIT_LOG_PATH = Path("./data/audit.log")
 DEFAULT_CHROMADB_HOST = "chromadb"
 DEFAULT_CHROMADB_PORT = 8500
+DEFAULT_INGEST_FILESYSTEM_ROOT = Path("./data/incoming")
 
 
 @dataclass(frozen=True)
@@ -114,6 +125,40 @@ def _bool(env_var: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_source_connector() -> SourceConnector:
+    """Dispatch on `SOURCE_CONNECTORS` env (infrastructure-level binding).
+
+    The env var is comma-separated to leave room for multiple parallel
+    connectors per deployment; for now we bind the first registered name
+    and ignore the rest until multi-source orchestration arrives.
+    """
+    raw = os.getenv("SOURCE_CONNECTORS", "filesystem").strip().lower()
+    selected = next((name for name in (token.strip() for token in raw.split(",")) if name), "")
+    if selected in ("filesystem", ""):
+        return FilesystemSourceConnector(
+            root=_path("INGEST_FILESYSTEM_ROOT", DEFAULT_INGEST_FILESYSTEM_ROOT),
+        )
+    if selected in ("placeholder", "none"):
+        return NotImplementedSourceConnector()
+    raise ValueError(
+        f"unsupported SOURCE_CONNECTORS={selected!r}; available: 'filesystem'. "
+        "Add a new `SourceConnector` implementation under services/ingest/application/."
+    )
+
+
+def _build_document_converter() -> DocumentConverter:
+    """Dispatch on `DOCUMENT_CONVERTER` env (infrastructure-level binding)."""
+    backend = os.getenv("DOCUMENT_CONVERTER", "markitdown").strip().lower()
+    if backend in ("markitdown", ""):
+        return MarkitdownDocumentConverter()
+    if backend in ("placeholder", "none"):
+        return NotImplementedDocumentConverter()
+    raise ValueError(
+        f"unsupported DOCUMENT_CONVERTER={backend!r}; available: 'markitdown'. "
+        "Add a new `DocumentConverter` implementation under services/ingest/application/."
+    )
 
 
 def _build_vector_store() -> VectorStoreRepository:
@@ -180,8 +225,8 @@ def build_container() -> Container:
       ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
       ✓ Chunker              — recursive (ConfigProvider method dispatch)
       ✓ EmbeddingProvider    — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
-      ✗ SourceConnector      — placeholder (Phase 2 remaining)
-      ✗ DocumentConverter    — placeholder (Phase 2 remaining)
+      ✓ SourceConnector      — filesystem (env-selected)
+      ✓ DocumentConverter    — markitdown (env-selected)
       ✗ Reranker             — placeholder (Phase 3)
       ✗ GenerationProvider   — placeholder (Phase 3)
     """
@@ -194,8 +239,8 @@ def build_container() -> Container:
     embedding = config_provider.get_embedding_config()
 
     return Container(
-        source_connector=NotImplementedSourceConnector(),
-        document_converter=NotImplementedDocumentConverter(),
+        source_connector=_build_source_connector(),
+        document_converter=_build_document_converter(),
         chunker=_build_chunker(chunking),
         embedding_provider=_build_embedding_provider(embedding),
         vector_store=_build_vector_store(),
@@ -212,6 +257,18 @@ def build_orchestrator(container: Container) -> RAGPipelineOrchestrator:
         vector_store=container.vector_store,
         reranker=container.reranker,
         generation_provider=container.generation_provider,
+        config_provider=container.config_provider,
+        audit_logger=container.audit_logger,
+    )
+
+
+def build_ingest_orchestrator(container: Container) -> IngestPipelineOrchestrator:
+    return IngestPipelineOrchestrator(
+        source_connector=container.source_connector,
+        document_converter=container.document_converter,
+        chunker=container.chunker,
+        embedding_provider=container.embedding_provider,
+        vector_store=container.vector_store,
         config_provider=container.config_provider,
         audit_logger=container.audit_logger,
     )
@@ -245,10 +302,11 @@ async def serve_all() -> None:
     load_dotenv()
 
     container = build_container()
-    orchestrator = build_orchestrator(container)
+    rag_orchestrator = build_orchestrator(container)
+    ingest_orchestrator = build_ingest_orchestrator(container)
 
-    gateway_app = create_gateway_app(orchestrator)
-    ingest_app = create_ingest_app()
+    gateway_app = create_gateway_app(rag_orchestrator)
+    ingest_app = create_ingest_app(ingest_orchestrator)
     admin_app = create_admin_app(
         config_provider=container.config_provider,
         audit_logger=container.audit_logger,

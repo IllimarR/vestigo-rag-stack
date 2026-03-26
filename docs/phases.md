@@ -13,7 +13,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | # | Phase | State |
 |---|---|---|
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
-| 2 | Ingestion Pipeline MVP | 🔄 **In progress** — ChromaDB, RecursiveChunker, OpenAI-compatible embeddings landed |
+| 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
 | 3 | Retrieval, Generation, and API Gateway | Not started |
 | 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | Not started |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
@@ -42,9 +42,12 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **ChromaDB `VectorStoreRepository`** — server-backed HTTP mode, env-selectable via `VECTOR_STORE_BACKEND=chromadb` + `CHROMADB_HOST`/`CHROMADB_PORT`/`CHROMADB_SSL`. Serializes `Chunk` to JSON in metadata, flattens user metadata for native `where`-clause filtering, translates `MetadataFilter` operators (`contains` is post-filtered in Python).
 - ✓ **`RecursiveChunker`** — boundary-aware sliding window over Markdown. Prefers paragraph > line > sentence > word separators within a ~25% lookback of the hard cap. `Chunk.start` / `Chunk.end` reference positions in the original text; overlap is a natural consequence of start offset, not text duplication. Bound when `ConfigProvider.get_chunking_config().method == "recursive"`.
 - ✓ **`OpenAIHttpEmbeddingProvider`** — speaks the OpenAI `/v1/embeddings` shape. Works with OpenAI itself, Ollama, LM Studio, LocalAI, vLLM, and similar. Lazy dimension discovery, optional Bearer auth, injectable `httpx.Client` for testing. Bound when `ConfigProvider.get_embedding_config().api_type == "openai-compatible"`.
-- ✓ **Contract compliance suites** — parameterized tests across backends: 17 × N for vector store (`test_vector_store_contracts.py`), 13 × N for chunker (`test_chunker_contracts.py`), 12 × N for embedding provider (`test_embedding_provider_contracts.py`). New backends plug into each `_BACKENDS` / `_CHUNKERS` / `_PROVIDERS` dict and the whole suite re-runs free.
-- ✓ **Composition root dispatch** — application-level contracts (`Chunker`, `EmbeddingProvider`) dispatch on `ConfigProvider` values per `docs/architecture.md` §Modularity Proof §4; infrastructure-level contracts (`VectorStoreRepository`) dispatch on `.env`.
-- Remaining: `SourceConnector` (filesystem), `DocumentConverter`, ingest orchestration, skip-and-log for unsupported types. Optional Phase 2 add-on: second `EmbeddingProvider` (local sentence-transformers) for the swap-test evidence.
+- ✓ **`FilesystemSourceConnector`** — recursive scan of `INGEST_FILESYSTEM_ROOT` with in-memory snapshot diffing to emit ADDED / MODIFIED / DELETED `ChangeEvent`s; `since` watermark filters ADDED / MODIFIED while deletions are always reported. Env-selected via `SOURCE_CONNECTORS=filesystem`.
+- ✓ **`MarkitdownDocumentConverter`** — Microsoft `markitdown` (MIT) converts PDF, DOCX, PPTX, XLSX, HTML, CSV, JSON, XML, plain text, and a handful of other office formats to Markdown. Conservative whitelist; unsupported types raise `UnsupportedFileTypeError` for the orchestrator to skip-and-log. Env-selected via `DOCUMENT_CONVERTER=markitdown`.
+- ✓ **`IngestPipelineOrchestrator`** — applies `ChangeEvent` batches per `docs/pipeline.md` §Document Lifecycle. ADDED / MODIFIED / DELETED flows, delete-then-store on MODIFIED, skip-and-log on unsupported types or per-document exceptions, accumulated `IngestResult` counts.
+- ✓ **Contract compliance suites** — parameterized tests across backends: vector store (17 × N), chunker (13 × N), embedding provider (12 × N), source connector (13 × N), document converter (11 × N). New backends plug into the relevant `_*` dict and inherit the full suite.
+- ✓ **Composition root dispatch** — application-level contracts (`Chunker`, `EmbeddingProvider`) dispatch on `ConfigProvider` values per `docs/architecture.md` §Modularity Proof §4; infrastructure-level contracts (`VectorStoreRepository`, `SourceConnector`, `DocumentConverter`) dispatch on `.env`.
+- Deferred to later phases: HTTP trigger for the ingest pipeline (`ApiPushSourceConnector` routes — Phase 4); optional second `EmbeddingProvider` (local sentence-transformers) for the swap-test evidence — Phase 5.
 
 ---
 

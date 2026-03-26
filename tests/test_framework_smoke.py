@@ -41,7 +41,12 @@ from contracts import (
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from main import Container, build_container, build_orchestrator
+from main import (
+    Container,
+    build_container,
+    build_ingest_orchestrator,
+    build_orchestrator,
+)
 from services.admin.api import create_app as create_admin_app
 from services.admin.application.file_config_provider import (
     DEFAULT_CONFIG,
@@ -50,6 +55,12 @@ from services.admin.application.file_config_provider import (
 from services.api_gateway.api import create_app as create_gateway_app
 from services.audit.application.file_audit_logger import FileAuditLogger
 from services.ingest.api import create_app as create_ingest_app
+from services.ingest.application.filesystem_source_connector import (
+    FilesystemSourceConnector,
+)
+from services.ingest.application.markitdown_document_converter import (
+    MarkitdownDocumentConverter,
+)
 from services.ingest.application.recursive_chunker import RecursiveChunker
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
@@ -90,12 +101,7 @@ def test_dtos_are_frozen() -> None:
 def test_placeholders_raise_not_implemented(tmp_path: Path) -> None:
     container = _container_in(tmp_path)
 
-    # Still placeholder at this point in Phase 2.
-    with pytest.raises(NotImplementedError, match="SourceConnector"):
-        container.source_connector.get_source_id()
-    with pytest.raises(NotImplementedError, match="DocumentConverter"):
-        container.document_converter.supported_types()
-    # Phase 3.
+    # Phase 3 contracts still placeholder.
     with pytest.raises(NotImplementedError, match="Reranker"):
         container.reranker.get_model_id()
     with pytest.raises(NotImplementedError, match="GenerationProvider"):
@@ -210,6 +216,9 @@ def _container_in(tmp_path: Path) -> Container:
     # Smoke tests assert the default (in-memory) binding. Contract tests in
     # tests/test_vector_store_contracts.py cover chromadb explicitly.
     _os.environ["VECTOR_STORE_BACKEND"] = "in_memory"
+    incoming = tmp_path / "incoming"
+    incoming.mkdir(parents=True, exist_ok=True)
+    _os.environ["INGEST_FILESYSTEM_ROOT"] = str(incoming)
     return build_container()
 
 
@@ -222,6 +231,8 @@ def test_container_builds_with_real_bindings(tmp_path: Path) -> None:
     # Phase 2 bindings (dispatch from the seeded default config).
     assert isinstance(container.chunker, RecursiveChunker)
     assert isinstance(container.embedding_provider, OpenAIHttpEmbeddingProvider)
+    assert isinstance(container.source_connector, FilesystemSourceConnector)
+    assert isinstance(container.document_converter, MarkitdownDocumentConverter)
 
 
 def test_orchestrator_still_stub(tmp_path: Path) -> None:
@@ -245,8 +256,10 @@ def test_api_gateway_health(tmp_path: Path) -> None:
         assert r.json()["service"] == "api_gateway"
 
 
-def test_ingest_api_health() -> None:
-    with TestClient(create_ingest_app()) as client:
+def test_ingest_api_health(tmp_path: Path) -> None:
+    container = _container_in(tmp_path)
+    app = create_ingest_app(build_ingest_orchestrator(container))
+    with TestClient(app) as client:
         r = client.get("/health")
         assert r.status_code == 200
         assert r.json()["service"] == "ingest"
@@ -268,7 +281,7 @@ def test_openapi_docs_available(tmp_path: Path) -> None:
     container = _container_in(tmp_path)
     apps = [
         create_gateway_app(build_orchestrator(container)),
-        create_ingest_app(),
+        create_ingest_app(build_ingest_orchestrator(container)),
         create_admin_app(
             config_provider=container.config_provider,
             audit_logger=container.audit_logger,
