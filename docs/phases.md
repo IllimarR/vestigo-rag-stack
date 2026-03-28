@@ -14,7 +14,7 @@ The solution is implemented in phases that first establish contract boundaries a
 |---|---|---|
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
 | 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
-| 3 | Retrieval, Generation, and API Gateway | Not started |
+| 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
 | 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | Not started |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
 | 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
@@ -48,6 +48,15 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **Contract compliance suites** — parameterized tests across backends: vector store (17 × N), chunker (13 × N), embedding provider (12 × N), source connector (13 × N), document converter (11 × N). New backends plug into the relevant `_*` dict and inherit the full suite.
 - ✓ **Composition root dispatch** — application-level contracts (`Chunker`, `EmbeddingProvider`) dispatch on `ConfigProvider` values per `docs/architecture.md` §Modularity Proof §4; infrastructure-level contracts (`VectorStoreRepository`, `SourceConnector`, `DocumentConverter`) dispatch on `.env`.
 - Deferred to later phases: HTTP trigger for the ingest pipeline (`ApiPushSourceConnector` routes — Phase 4); optional second `EmbeddingProvider` (local sentence-transformers) for the swap-test evidence — Phase 5.
+
+### Phase 3 progress
+
+- ✓ **`OpenAIHttpGenerationProvider`** — calls upstream `/v1/chat/completions` (Ollama, vLLM, LM Studio, LocalAI, OpenAI itself, ...). Non-streaming and SSE streaming; system prompt prepended; parameters threaded through from `GenerationConfig`. Bound when `ConfigProvider.get_generation_config().api_type == "openai-compatible"`.
+- ✓ **`CrossEncoderReranker`** — pairwise cross-encoder reranker with an injectable `Scorer` callable. The default `sentence_transformers_scorer(model_name)` lazily loads sentence-transformers' `CrossEncoder` on first call, so the module's import surface stays light and contract tests run without touching torch. Bound when `ConfigProvider.get_reranker_config().type == "cross_encoder"`.
+- ✓ **`RAGPipelineOrchestrator.run` / `run_stream`** — real implementation of the query flow in `docs/pipeline.md`. Embed → retrieve (top-k 20) → rerank (top-k 5) → render system prompt from `ConfigProvider.get_rag_prompt_template()` → generate → audit (SUCCESS / PARTIAL / FAILED).
+- ✓ **`POST /v1/responses`** — OpenAI Responses-shaped endpoint with non-streaming JSON and SSE streaming (`response.output_text.delta` + `response.completed`). Bearer-token auth via env-driven `ApiKeyVerifier` (full key management arrives in Phase 4).
+- ✓ **Contract compliance suites** — generation provider (7 × N) and reranker (8 × N) added alongside the Phase 2 suites; orchestrator and route are covered by dedicated test modules.
+- Deferred: full API-key management (Phase 4); second `Reranker` (LLM-as-reranker) and second `GenerationProvider` (Anthropic) for Phase 5 swap evidence.
 
 ---
 

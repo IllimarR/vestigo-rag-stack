@@ -74,12 +74,21 @@ curl http://localhost:8001/health   # Admin API
 curl http://localhost:8002/health   # Ingest API
 ```
 
-Phase 1 delivers functional implementations of three contracts:
-`ConfigProvider` (YAML file at `CONFIG_FILE_PATH`, auto-seeded on first run),
-`AuditLogger` (JSONL at `AUDIT_LOG_FILE`), and `VectorStoreRepository`
-(in-memory cosine similarity — contract-validation stub, not production).
-The remaining six contracts still raise `NotImplementedError` until their
-phase lands. See [Implementation Phases](docs/phases.md) for what lands when.
+All nine contracts now have real bindings. The default seed config
+(`config.yaml`) points the generation provider at Ollama on
+`http://localhost:11434/v1` and the embedding provider similarly; bring
+your own OpenAI-compatible endpoint if you don't have Ollama running.
+See [Implementation Phases](docs/phases.md) for what landed in which
+phase.
+
+Quick smoke test:
+
+```bash
+# dev mode — empty API_KEYS allows anonymous requests
+curl -s http://localhost:8000/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{"input": "hello", "stream": false}'
+```
 
 ### Docker Compose (planned)
 

@@ -37,8 +37,10 @@ from contracts import (
     DocumentConverter,
     EmbeddingConfig,
     EmbeddingProvider,
+    GenerationConfig,
     GenerationProvider,
     Reranker,
+    RerankerConfig,
     SourceConnector,
     VectorStoreRepository,
 )
@@ -48,6 +50,7 @@ from dotenv import load_dotenv
 from services.admin.api import create_app as create_admin_app
 from services.admin.application.file_config_provider import FileConfigProvider
 from services.api_gateway.api import create_app as create_gateway_app
+from services.api_gateway.application.auth import ApiKeyVerifier, parse_allowed_keys
 from services.api_gateway.application.rag_pipeline_orchestrator import (
     RAGPipelineOrchestrator,
 )
@@ -68,8 +71,15 @@ from services.ingest.application.placeholders import (
     NotImplementedSourceConnector,
 )
 from services.ingest.application.recursive_chunker import RecursiveChunker
+from services.llm.application.cross_encoder_reranker import (
+    CrossEncoderReranker,
+    sentence_transformers_scorer,
+)
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
+)
+from services.llm.application.openai_http_generation_provider import (
+    OpenAIHttpGenerationProvider,
 )
 from services.llm.application.placeholders import (
     NotImplementedEmbeddingProvider,
@@ -189,6 +199,54 @@ def _build_chunker(chunk_config: ChunkConfig) -> Chunker:
     )
 
 
+def _build_reranker(reranker_config: RerankerConfig) -> Reranker:
+    """Dispatch on `RerankerConfig.type` per architecture.md §Modularity Proof §4."""
+    rtype = reranker_config.type.strip().lower()
+    if rtype in ("cross_encoder", "cross-encoder"):
+        return CrossEncoderReranker(
+            scorer=sentence_transformers_scorer(reranker_config.model_name),
+            model_name=reranker_config.model_name,
+        )
+    if rtype in ("placeholder", "none", ""):
+        return NotImplementedReranker()
+    raise ValueError(
+        f"unsupported reranker type={rtype!r}; available: 'cross_encoder'. "
+        "Add a new `Reranker` implementation under services/llm/application/."
+    )
+
+
+def _build_generation_provider(generation_config: GenerationConfig) -> GenerationProvider:
+    """Dispatch on `GenerationConfig.api_type` per architecture.md §Modularity Proof §4."""
+    api_type = generation_config.api_type.strip().lower()
+    if api_type in ("openai", "openai-compatible", "openai_compatible"):
+        api_key = None
+        params = generation_config.parameters or {}
+        maybe_key = params.get("api_key")
+        if isinstance(maybe_key, str) and maybe_key:
+            api_key = maybe_key
+        return OpenAIHttpGenerationProvider(
+            endpoint=generation_config.endpoint,
+            model_name=generation_config.model_name,
+            api_key=api_key,
+        )
+    if api_type in ("placeholder", "none", ""):
+        return NotImplementedGenerationProvider()
+    raise ValueError(
+        f"unsupported generation api_type={api_type!r}; available: 'openai-compatible'. "
+        "Add a new `GenerationProvider` implementation under services/llm/application/."
+    )
+
+
+def _build_api_key_verifier() -> ApiKeyVerifier:
+    allowed = parse_allowed_keys(os.getenv("API_KEYS"))
+    if not allowed:
+        print(
+            "[vestigo] WARNING: API_KEYS is empty; gateway runs in dev mode "
+            "and accepts unauthenticated requests."
+        )
+    return ApiKeyVerifier(allowed=allowed)
+
+
 def _build_embedding_provider(embedding_config: EmbeddingConfig) -> EmbeddingProvider:
     """Dispatch on `EmbeddingConfig.api_type` per architecture.md §Modularity Proof §4."""
     api_type = embedding_config.api_type.strip().lower()
@@ -227,8 +285,8 @@ def build_container() -> Container:
       ✓ EmbeddingProvider    — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
       ✓ SourceConnector      — filesystem (env-selected)
       ✓ DocumentConverter    — markitdown (env-selected)
-      ✗ Reranker             — placeholder (Phase 3)
-      ✗ GenerationProvider   — placeholder (Phase 3)
+      ✓ Reranker             — cross-encoder (ConfigProvider type dispatch)
+      ✓ GenerationProvider   — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
     """
 
     config_path = _path("CONFIG_FILE_PATH", DEFAULT_CONFIG_PATH)
@@ -237,6 +295,8 @@ def build_container() -> Container:
     config_provider = FileConfigProvider(config_path)
     chunking = config_provider.get_chunking_config()
     embedding = config_provider.get_embedding_config()
+    reranker_cfg = config_provider.get_reranker_config()
+    generation_cfg = config_provider.get_generation_config()
 
     return Container(
         source_connector=_build_source_connector(),
@@ -244,8 +304,8 @@ def build_container() -> Container:
         chunker=_build_chunker(chunking),
         embedding_provider=_build_embedding_provider(embedding),
         vector_store=_build_vector_store(),
-        reranker=NotImplementedReranker(),
-        generation_provider=NotImplementedGenerationProvider(),
+        reranker=_build_reranker(reranker_cfg),
+        generation_provider=_build_generation_provider(generation_cfg),
         audit_logger=FileAuditLogger(audit_log_path),
         config_provider=config_provider,
     )
@@ -304,8 +364,9 @@ async def serve_all() -> None:
     container = build_container()
     rag_orchestrator = build_orchestrator(container)
     ingest_orchestrator = build_ingest_orchestrator(container)
+    api_key_verifier = _build_api_key_verifier()
 
-    gateway_app = create_gateway_app(rag_orchestrator)
+    gateway_app = create_gateway_app(rag_orchestrator, api_key_verifier=api_key_verifier)
     ingest_app = create_ingest_app(ingest_orchestrator)
     admin_app = create_admin_app(
         config_provider=container.config_provider,

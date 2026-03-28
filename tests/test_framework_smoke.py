@@ -60,8 +60,12 @@ from services.ingest.application.markitdown_document_converter import (
     MarkitdownDocumentConverter,
 )
 from services.ingest.application.recursive_chunker import RecursiveChunker
+from services.llm.application.cross_encoder_reranker import CrossEncoderReranker
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
+)
+from services.llm.application.openai_http_generation_provider import (
+    OpenAIHttpGenerationProvider,
 )
 from services.vector_store.application.in_memory_vector_store import (
     InMemoryVectorStoreRepository,
@@ -96,14 +100,9 @@ def test_dtos_are_frozen() -> None:
 # --- Placeholders still in force for the six Phase 2/3 contracts ------------
 
 
-def test_placeholders_raise_not_implemented(tmp_path: Path) -> None:
-    container = _container_in(tmp_path)
-
-    # Phase 3 contracts still placeholder.
-    with pytest.raises(NotImplementedError, match="Reranker"):
-        container.reranker.get_model_id()
-    with pytest.raises(NotImplementedError, match="GenerationProvider"):
-        container.generation_provider.get_model_id()
+# Every contract now has a real binding; the historical "placeholders
+# still raise" smoke test is gone. Per-contract behaviour lives in the
+# parameterized suites under `tests/test_*_contracts.py`.
 
 
 # --- FileConfigProvider ------------------------------------------------------
@@ -231,6 +230,9 @@ def test_container_builds_with_real_bindings(tmp_path: Path) -> None:
     assert isinstance(container.embedding_provider, OpenAIHttpEmbeddingProvider)
     assert isinstance(container.source_connector, FilesystemSourceConnector)
     assert isinstance(container.document_converter, MarkitdownDocumentConverter)
+    # Phase 3 bindings.
+    assert isinstance(container.reranker, CrossEncoderReranker)
+    assert isinstance(container.generation_provider, OpenAIHttpGenerationProvider)
 
 
 # Orchestrator behaviour is covered in detail by
