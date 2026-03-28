@@ -101,6 +101,7 @@ fabric.properties
 
 # Claude
 .claude/
+CLAUDE.md
 
 # GSD Planning
 .planning/
