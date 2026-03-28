@@ -7,6 +7,10 @@ exposes implementations of `EmbeddingProvider`, `Reranker`, and
 
 from __future__ import annotations
 
+from services.llm.application.cross_encoder_reranker import (
+    CrossEncoderReranker,
+    sentence_transformers_scorer,
+)
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
 )
@@ -20,9 +24,11 @@ from services.llm.application.placeholders import (
 )
 
 __all__ = [
+    "CrossEncoderReranker",
     "NotImplementedEmbeddingProvider",
     "NotImplementedGenerationProvider",
     "NotImplementedReranker",
     "OpenAIHttpEmbeddingProvider",
     "OpenAIHttpGenerationProvider",
+    "sentence_transformers_scorer",
 ]

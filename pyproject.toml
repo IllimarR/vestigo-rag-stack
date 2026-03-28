@@ -20,6 +20,7 @@ dependencies = [
     "chromadb>=0.5",
     "httpx>=0.28",
     "markitdown>=0.0.1",
+    "sentence-transformers>=3.0",
 ]
 
 [dependency-groups]

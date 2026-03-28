@@ -5,7 +5,7 @@
 | Contract | Protocol | Implementation |
 |---|---|---|
 | `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) |
-| `Reranker` | `contracts.Reranker` | `application/placeholders.py::NotImplementedReranker` |
+| `Reranker` | `contracts.Reranker` | `application/cross_encoder_reranker.py::CrossEncoderReranker` (Phase 3 ✓) |
 | `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) |
 
 ## Public surface
@@ -29,6 +29,23 @@ and the ingest pipeline.
   local servers that don't require auth.
 - Composition root dispatches this adapter when
   `ConfigProvider.get_embedding_config().api_type == "openai-compatible"`.
+
+### `CrossEncoderReranker` (Phase 3)
+
+- Pairwise relevance scorer: a cross-encoder consumes the
+  `(query, candidate)` pair jointly and emits a relevance score, which
+  is sharper than the bi-encoder used for retrieval at the cost of
+  running once per pair.
+- The model library is injected via a `Scorer` callable
+  (`list[(query, candidate)] -> list[float]`). The default production
+  builder `sentence_transformers_scorer(model_name)` lazily loads
+  sentence-transformers' `CrossEncoder` on first invocation, so importing
+  the adapter doesn't pull torch.
+- `rerank` preserves the original `similarity_score`, attaches the new
+  `rerank_score`, sorts descending by rerank score (stable on ties by
+  original order), and clamps to `top_k`.
+- Composition root dispatches this adapter when
+  `ConfigProvider.get_reranker_config().type == "cross-encoder"`.
 
 ### `OpenAIHttpGenerationProvider` (Phase 3)
 
@@ -55,13 +72,16 @@ and the ingest pipeline.
   registered `GenerationProvider` via `_PROVIDERS`. Current entries:
   `openai_http`. Covers unary + SSE streaming + system-prompt placement +
   parameter forwarding + Bearer auth.
+- `tests/test_reranker_contracts.py` — parameterized over every registered
+  `Reranker` via `_RERANKERS`. Current entries: `cross_encoder`. Tests
+  inject a fake `Scorer` so the suite runs without loading torch.
 
 ## What is still missing
 
 Phase 3:
 
-- Cross-encoder reranker (local model) and LLM-as-reranker (delegates to
-  the `GenerationProvider` contract internally).
+- LLM-as-reranker (delegates to the `GenerationProvider` contract
+  internally; second `Reranker` for swap evidence).
 
 Phase 5 (modularity proof second adapters):
 
