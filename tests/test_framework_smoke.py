@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 from contracts import (
     AuditLogger,
-    ChatMessage,
     ChunkConfig,
     Chunker,
     ConfigProvider,
@@ -33,7 +32,6 @@ from contracts import (
     QueryStatus,
     Reranker,
     RerankerConfig,
-    Role,
     SourceConnector,
     TokenUsage,
     VectorStoreRepository,
@@ -235,13 +233,10 @@ def test_container_builds_with_real_bindings(tmp_path: Path) -> None:
     assert isinstance(container.document_converter, MarkitdownDocumentConverter)
 
 
-def test_orchestrator_still_stub(tmp_path: Path) -> None:
-    container = _container_in(tmp_path)
-    orchestrator = build_orchestrator(container)
-    with pytest.raises(NotImplementedError, match="RAGPipelineOrchestrator"):
-        orchestrator.run(
-            [ChatMessage(role=Role.USER, content="hi")], api_key_id="test"
-        )
+# Orchestrator behaviour is covered in detail by
+# `tests/test_rag_pipeline_orchestrator.py` with in-test fakes; the smoke
+# test layer no longer asserts NotImplementedError on it because the
+# orchestrator is no longer a stub.
 
 
 # --- FastAPI health + OpenAPI -----------------------------------------------
