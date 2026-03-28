@@ -6,7 +6,7 @@
 |---|---|---|
 | `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) |
 | `Reranker` | `contracts.Reranker` | `application/placeholders.py::NotImplementedReranker` |
-| `GenerationProvider` | `contracts.GenerationProvider` | `application/placeholders.py::NotImplementedGenerationProvider` |
+| `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) |
 
 ## Public surface
 
@@ -30,27 +30,44 @@ and the ingest pipeline.
 - Composition root dispatches this adapter when
   `ConfigProvider.get_embedding_config().api_type == "openai-compatible"`.
 
+### `OpenAIHttpGenerationProvider` (Phase 3)
+
+- Speaks the OpenAI `/v1/chat/completions` shape — works against OpenAI
+  itself, Ollama, LM Studio, LocalAI, llamacpp-server, vLLM, and similar
+  OpenAI-compatible endpoints.
+- `generate(request)` returns a full `GenerationResponse`;
+  `generate_stream(request)` yields one `GenerationChunk` per
+  upstream-emitted `content` delta and a final usage-bearing chunk when
+  the server reports usage on the last SSE frame.
+- `system_prompt` is prepended as a `system`-role message; user/assistant
+  turns flow through unchanged.
+- Constructor takes an injectable `httpx.Client` so tests can drive a
+  `MockTransport` for both unary and streaming responses.
+- Composition root dispatches this adapter when
+  `ConfigProvider.get_generation_config().api_type == "openai-compatible"`.
+
 ## Contract compliance
 
-`tests/test_embedding_provider_contracts.py` — parameterized over every
-registered provider. The HTTP adapter is tested against an
-`httpx.MockTransport` that simulates the OpenAI shape, so no real server
-is required to run the suite.
+- `tests/test_embedding_provider_contracts.py` — parameterized over every
+  registered `EmbeddingProvider` via `_PROVIDERS`. Current entries:
+  `openai_http`.
+- `tests/test_generation_provider_contracts.py` — parameterized over every
+  registered `GenerationProvider` via `_PROVIDERS`. Current entries:
+  `openai_http`. Covers unary + SSE streaming + system-prompt placement +
+  parameter forwarding + Bearer auth.
 
 ## What is still missing
 
-Phase 2 (recommended second adapter for the swap proof):
-
-- **Local embedding provider** (sentence-transformers with `BAAI/bge-small-en-v1.5`
-  or similar) — true offline path, demonstrates `EmbeddingProvider` swap test
-  per `docs/architecture.md` §Modularity Proof §2.
-
 Phase 3:
 
-- OpenAI-compatible generation adapter (non-streaming + SSE streaming).
-- Anthropic generation adapter (second `GenerationProvider` for swap evidence).
-- Cross-encoder reranker (local model).
-- LLM-as-reranker (uses the `GenerationProvider` contract internally).
+- Cross-encoder reranker (local model) and LLM-as-reranker (delegates to
+  the `GenerationProvider` contract internally).
+
+Phase 5 (modularity proof second adapters):
+
+- Local embedding provider (sentence-transformers, e.g.
+  `BAAI/bge-small-en-v1.5`) for the offline path.
+- Anthropic-API `GenerationProvider` for the generation-side swap.
 
 Each of the three stages is **independently configurable** via `ConfigProvider`;
 no adapter here may share transport with another.

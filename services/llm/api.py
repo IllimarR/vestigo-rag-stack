@@ -10,6 +10,9 @@ from __future__ import annotations
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
 )
+from services.llm.application.openai_http_generation_provider import (
+    OpenAIHttpGenerationProvider,
+)
 from services.llm.application.placeholders import (
     NotImplementedEmbeddingProvider,
     NotImplementedGenerationProvider,
@@ -21,4 +24,5 @@ __all__ = [
     "NotImplementedGenerationProvider",
     "NotImplementedReranker",
     "OpenAIHttpEmbeddingProvider",
+    "OpenAIHttpGenerationProvider",
 ]
