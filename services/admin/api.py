@@ -1,8 +1,10 @@
 """Public HTTP surface for the Admin API.
 
-Phase 1 exposes `/health` and OpenAPI docs. Phase 4 will add endpoints for
-API key management, model configuration, chunk settings, default collection,
-RAG prompt template management, and audit log querying.
+Today only `/health` and OpenAPI docs are exposed; the
+`ConfigProvider` and `AuditLogger` are bound on `app.state` so Phase 4
+routes (API key management, model configuration, chunk settings,
+default collection, RAG prompt template management, and audit log
+querying) can drive them without rewiring the composition root.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ def create_app(
         description=(
             "Admin control plane: API keys, model configuration, chunking, "
             "RAG prompt template, default collection, and audit log access. "
-            "Phase 1 exposes /health only."
+            "Today exposes /health only; full surface arrives in Phase 4."
         ),
     )
 

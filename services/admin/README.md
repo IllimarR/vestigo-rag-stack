@@ -14,22 +14,22 @@ through the `ConfigProvider` contract").
 
 ## Public surface
 
-`api.py::create_app(config_provider, audit_logger)` — FastAPI app. Phase 1
-exposes only `/health`.
+`api.py::create_app(config_provider, audit_logger)` — FastAPI app. Today
+only `/health` is exposed; the full Admin surface lands in Phase 4.
 
-## Phase 1 status
+## `FileConfigProvider`
 
-- ✓ `FileConfigProvider` — YAML file backend. Reads on every access;
-  writes atomically via temp-file + rename. Auto-seeds a defaults file at
-  `CONFIG_FILE_PATH` on first run so the composition root boots without
-  manual setup. A reference `config/config.yaml.example` lives in the repo.
+- ✓ YAML file backend. Reads on every access; writes atomically via
+  temp-file + rename. Auto-seeds a defaults file at `CONFIG_FILE_PATH`
+  on first run so the composition root boots without manual setup. A
+  reference `config/config.yaml.example` lives in the repo.
 
 ## What is still missing
 
 Phase 4:
 
-- Database-backed `ConfigProvider` (replaces the file-based stub; seeds
-  from the existing config file on first run).
+- Database-backed `ConfigProvider` (replaces the file-based
+  implementation; seeds from the existing config file on first run).
 - API key management (create, revoke, list).
 - Model configuration endpoints (embedding, reranking, generation).
 - Chunking configuration endpoint.

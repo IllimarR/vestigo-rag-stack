@@ -10,7 +10,10 @@
 
 ## Public surface
 
-`api.py::create_app()` — FastAPI app. Phase 1 exposes only `/health`.
+`api.py::create_app(ingest_orchestrator)` — FastAPI app. Today exposes
+only `/health`; the `IngestPipelineOrchestrator` is bound on
+`app.state.ingest_orchestrator` so Phase 4 routes can drive a real
+ingest run without rewiring the composition root.
 
 The Ingest API is architecturally an `ApiPushSourceConnector` implementation
 (see `docs/architecture.md` §1 and §5.1). Documents submitted via HTTP will
@@ -95,7 +98,7 @@ rather than bypassing it.
   continuity after failure, empty-Markdown skip, unsupported-type skip,
   and accumulated `IngestResult` counts.
 
-## Phase 2 status — what is still missing
+## What is still missing
 
 - HTTP routes materializing the `ApiPushSourceConnector` (Phase 4).
 

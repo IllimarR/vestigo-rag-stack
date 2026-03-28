@@ -52,7 +52,7 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ## Quick Start
 
-### Development (Phase 1 skeleton)
+### Development
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
