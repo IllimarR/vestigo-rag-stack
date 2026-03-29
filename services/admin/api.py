@@ -14,6 +14,7 @@ from contracts import AuditLogger, ConfigProvider
 from fastapi import FastAPI
 
 from services.admin.application.api_key_store import ApiKeyStore
+from services.admin.application.routes import build_router
 
 __all__ = ["create_app"]
 
@@ -41,5 +42,7 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "admin"}
+
+    app.include_router(build_router())
 
     return app
