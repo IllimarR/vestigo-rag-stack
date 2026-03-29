@@ -15,7 +15,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
 | 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
 | 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
-| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | In progress — control plane wired, ingest push + admin-ui pending |
+| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | In progress — backend complete, admin-ui pending |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
 | 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
 
@@ -57,8 +57,10 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **`ApiKeyStore`** — Protocol owned by the admin service, two implementations: `EnvApiKeyStore` (read-only env-seeded, default) and `SqliteApiKeyStore` (DB-backed CRUD with sha-256 hashed plaintext; plaintext returned exactly once on create). The gateway depends only on `store.as_resolver()` — no cross-service import.
 - ✓ **`ApiKeyVerifier`** refactored to `resolver + enforce` shape so both env and sqlite stores plug in without code duplication.
 - ✓ **Admin API endpoints** at `:8001/v1/` — `GET /config`, six per-section `PUT` writes (embedding, reranker, generation, chunking, rag-prompt-template, default-collection), `GET /audit?…`, `GET|POST /api-keys`, `DELETE /api-keys/{audit_id}`. Every write emits an admin audit event. Shared-secret bearer auth via `ADMIN_API_KEY` env (full per-user auth is a Phase 6 follow-up).
-- ✓ **Contract compliance suites** — `test_config_provider_contracts.py` (27 × N), `test_audit_logger_contracts.py` (20 × N), `test_api_key_store_contracts.py` (24 × N including the env/sqlite skip discipline). Admin routes covered by `test_admin_api_routes.py` (15 cases).
-- Deferred to remaining Phase 4 commits: `ApiPushSourceConnector` + ingest HTTP routes; the admin-ui Node.js + React scaffold on port 3000. Alembic remains deferred (schema is bootstrapped via `Base.metadata.create_all()` — adequate while no migrations exist).
+- ✓ **`ApiPushSourceConnector`** — in-memory push connector materializing the architecture's "the Ingest API IS an ApiPushSourceConnector" claim. ADDED/MODIFIED decided by whether `document_id` is known; `drop()` releases staged bytes after the orchestrator runs so memory is bounded.
+- ✓ **Ingest API push routes** at `:8002/v1/` — `POST /documents` (single) and `POST /documents/batch` (array). Routes refuse with 409 when `SOURCE_CONNECTORS≠api` so the failure mode is loud. Shared-secret bearer auth via `INGEST_API_KEY` env.
+- ✓ **Contract compliance suites** — `test_config_provider_contracts.py` (27 × N), `test_audit_logger_contracts.py` (20 × N), `test_api_key_store_contracts.py` (24 × N including the env/sqlite skip discipline). Admin routes covered by `test_admin_api_routes.py` (15 cases); ingest routes by `test_ingest_api_routes.py` (11 cases). The source-connector parameterized suite (12 × N) gained an `api_push` factory; the same test bodies cover both filesystem and api-push connectors.
+- Deferred to a remaining Phase 4 commit: the admin-ui Node.js + React scaffold on port 3000. Alembic remains deferred (schema is bootstrapped via `Base.metadata.create_all()` — adequate while no migrations exist). Multi-source ingestion (filesystem + api active simultaneously) is a future enhancement; today `SOURCE_CONNECTORS` picks one.
 
 ### Phase 3 progress
 

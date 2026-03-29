@@ -4,21 +4,31 @@
 
 | Contract | Protocol | Implementation |
 |---|---|---|
-| `SourceConnector` | `contracts.SourceConnector` | `application/filesystem_source_connector.py::FilesystemSourceConnector` (Phase 2 ✓) |
+| `SourceConnector` | `contracts.SourceConnector` | `application/filesystem_source_connector.py::FilesystemSourceConnector` (Phase 2 ✓), `application/api_push_source_connector.py::ApiPushSourceConnector` (Phase 4 ✓) |
 | `DocumentConverter` | `contracts.DocumentConverter` | `application/markitdown_document_converter.py::MarkitdownDocumentConverter` (Phase 2 ✓) |
 | `Chunker` | `contracts.Chunker` | `application/recursive_chunker.py::RecursiveChunker` (Phase 2 ✓) |
 
 ## Public surface
 
-`api.py::create_app(ingest_orchestrator)` — FastAPI app. Today exposes
-only `/health`; the `IngestPipelineOrchestrator` is bound on
-`app.state.ingest_orchestrator` so Phase 4 routes can drive a real
-ingest run without rewiring the composition root.
+`api.py::create_app(ingest_orchestrator, source_connector, config_provider)`
+— FastAPI app on port 8002.
 
-The Ingest API is architecturally an `ApiPushSourceConnector` implementation
-(see `docs/architecture.md` §1 and §5.1). Documents submitted via HTTP will
-be adapted to `ChangeEvent` flow through the `SourceConnector` contract
-rather than bypassing it.
+| Route | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Liveness probe |
+| `/v1/documents` | POST | Push a single document (ADDED / MODIFIED / DELETED) |
+| `/v1/documents/batch` | POST | Push an array of documents in one request |
+
+Push routes only function when `SOURCE_CONNECTORS=api`; pushing to a
+filesystem-backed deployment returns `409`. Bearer auth via the
+`INGEST_API_KEY` env variable; empty env = dev-mode unauthenticated.
+
+The Ingest API is architecturally an `ApiPushSourceConnector`
+implementation (see `docs/architecture.md` §1 and §5.1). Documents
+submitted via HTTP are staged on the connector, drained as standard
+`ChangeEvent`s, and flow through the same `IngestPipelineOrchestrator`
+the filesystem connector does — preserving contract isolation at the
+external boundary.
 
 ## Implementations
 
@@ -36,6 +46,20 @@ rather than bypassing it.
   connectors can coexist in one deployment with distinct ids.
 - Composition root dispatches this adapter when `SOURCE_CONNECTORS`
   contains `filesystem`.
+
+### `ApiPushSourceConnector` (Phase 4)
+
+- In-memory push connector. The Ingest API routes call
+  `push_document(...)` or `push_deletion(...)`, which stage the
+  document and queue a `ChangeEvent`. `detect_changes(...)` drains the
+  queue; `fetch_document(...)` returns the staged bytes.
+- ADDED vs MODIFIED is decided by whether `document_id` has been seen
+  before; callers may force MODIFIED in the route body.
+- `drop(document_id)` releases the staged bytes after the orchestrator
+  has finished. The Phase 4 routes always drop after processing so
+  memory does not accumulate.
+- Composition root dispatches this adapter when `SOURCE_CONNECTORS=api`.
+  Source id is configurable via `API_PUSH_SOURCE_ID` (default `api`).
 
 ### `IngestPipelineOrchestrator` (Phase 2)
 
@@ -88,9 +112,12 @@ rather than bypassing it.
 - `tests/test_chunker_contracts.py` — parameterized over every registered
   chunker via `_CHUNKERS`. Current entries: `recursive`.
 - `tests/test_source_connector_contracts.py` — parameterized over every
-  registered connector via `_CONNECTORS`. Current entries: `filesystem`.
-  The harness abstracts write/delete so future connectors (SharePoint,
-  DMS, etc.) reuse every assertion.
+  registered connector via `_CONNECTORS`. Current entries: `filesystem`,
+  `api_push`. The harness abstracts write/delete so future connectors
+  (SharePoint, DMS, etc.) reuse every assertion.
+- `tests/test_ingest_api_routes.py` — HTTP-level tests covering the
+  push routes' validation, auth, batch shape, and the 409 fail-loud
+  guard when the configured connector backend isn't `api`.
 - `tests/test_document_converter_contracts.py` — parameterized over every
   registered converter via `_CONVERTERS`. Current entries: `markitdown`.
 - `tests/test_ingest_pipeline_orchestrator.py` — orchestrator behaviour
@@ -100,7 +127,10 @@ rather than bypassing it.
 
 ## What is still missing
 
-- HTTP routes materializing the `ApiPushSourceConnector` (Phase 4).
+- Multi-source orchestration (running filesystem + api connectors in
+  the same deployment) — today `SOURCE_CONNECTORS` picks one. A
+  composing wrapper that routes `fetch_document` by `source_id` is the
+  natural follow-up.
 
 ## Private packages
 
