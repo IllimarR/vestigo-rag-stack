@@ -15,7 +15,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
 | 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
 | 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
-| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | In progress — backend complete, admin-ui pending |
+| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | ✓ **Complete** |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
 | 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
 
@@ -60,7 +60,8 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **`ApiPushSourceConnector`** — in-memory push connector materializing the architecture's "the Ingest API IS an ApiPushSourceConnector" claim. ADDED/MODIFIED decided by whether `document_id` is known; `drop()` releases staged bytes after the orchestrator runs so memory is bounded.
 - ✓ **Ingest API push routes** at `:8002/v1/` — `POST /documents` (single) and `POST /documents/batch` (array). Routes refuse with 409 when `SOURCE_CONNECTORS≠api` so the failure mode is loud. Shared-secret bearer auth via `INGEST_API_KEY` env.
 - ✓ **Contract compliance suites** — `test_config_provider_contracts.py` (27 × N), `test_audit_logger_contracts.py` (20 × N), `test_api_key_store_contracts.py` (24 × N including the env/sqlite skip discipline). Admin routes covered by `test_admin_api_routes.py` (15 cases); ingest routes by `test_ingest_api_routes.py` (11 cases). The source-connector parameterized suite (12 × N) gained an `api_push` factory; the same test bodies cover both filesystem and api-push connectors.
-- Deferred to a remaining Phase 4 commit: the admin-ui Node.js + React scaffold on port 3000. Alembic remains deferred (schema is bootstrapped via `Base.metadata.create_all()` — adequate while no migrations exist). Multi-source ingestion (filesystem + api active simultaneously) is a future enhancement; today `SOURCE_CONNECTORS` picks one.
+- ✓ **admin-ui** at port 3000 — Vite + React + TypeScript scaffold under `admin-ui/`. Three views (API keys, Configuration, Audit log) talking to `:8001/v1/` via a typed `fetch` wrapper. The shared admin bearer is held in `localStorage` (`vestigo.admin.token`). Vitest + Testing Library cover the smoke surface — tab switching, initial loads, localStorage persistence, and `Authorization` header attachment.
+- Deferred: Alembic remains deferred (schema is bootstrapped via `Base.metadata.create_all()` — adequate while no migrations exist). Multi-source ingestion (filesystem + api active simultaneously) is a future enhancement; today `SOURCE_CONNECTORS` picks one. Per-user / role-aware admin auth is a Phase 6 concern.
 
 ### Phase 3 progress
 
