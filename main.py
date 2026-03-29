@@ -56,6 +56,7 @@ from services.api_gateway.application.rag_pipeline_orchestrator import (
     RAGPipelineOrchestrator,
 )
 from services.audit.application.file_audit_logger import FileAuditLogger
+from services.audit.application.sqlite_audit_logger import SqliteAuditLogger
 from services.ingest.api import create_app as create_ingest_app
 from services.ingest.application.filesystem_source_connector import (
     FilesystemSourceConnector,
@@ -249,6 +250,30 @@ def _build_api_key_verifier() -> ApiKeyVerifier:
     return ApiKeyVerifier(allowed=allowed)
 
 
+def _build_audit_logger() -> AuditLogger:
+    """Dispatch on `AUDIT_BACKEND` env (infrastructure-level binding).
+
+    `file` (default) — `FileAuditLogger` appends JSONL records at
+    `AUDIT_LOG_FILE`. Zero-dep, line-by-line readable in any editor.
+
+    `sqlite` — `SqliteAuditLogger` writes rows to the control-plane DB
+    at `CONTROL_PLANE_DB_PATH`. Indexed columns make the audit-log
+    viewer filters cheap. Existing JSONL files are *not* migrated;
+    `query_logs` against the sqlite backend starts empty.
+    """
+
+    backend = os.getenv("AUDIT_BACKEND", "file").strip().lower()
+    if backend in ("file", ""):
+        audit_log_path = _path("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG_PATH)
+        return FileAuditLogger(audit_log_path)
+    if backend == "sqlite":
+        db_path = _path("CONTROL_PLANE_DB_PATH", DEFAULT_CONTROL_PLANE_DB_PATH)
+        return SqliteAuditLogger.from_path(db_path)
+    raise ValueError(
+        f"unknown AUDIT_BACKEND={backend!r}; expected 'file' or 'sqlite'."
+    )
+
+
 def _build_config_provider() -> ConfigProvider:
     """Dispatch on `CONFIG_BACKEND` env (infrastructure-level binding).
 
@@ -306,7 +331,7 @@ def build_container() -> Container:
 
     Current status:
       ✓ ConfigProvider       — file (YAML) OR sqlite (env-selected)
-      ✓ AuditLogger          — file-based (JSONL)
+      ✓ AuditLogger          — file (JSONL) OR sqlite (env-selected)
       ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
       ✓ Chunker              — recursive (ConfigProvider method dispatch)
       ✓ EmbeddingProvider    — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
@@ -315,8 +340,6 @@ def build_container() -> Container:
       ✓ Reranker             — cross-encoder (ConfigProvider type dispatch)
       ✓ GenerationProvider   — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
     """
-
-    audit_log_path = _path("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG_PATH)
 
     config_provider = _build_config_provider()
     chunking = config_provider.get_chunking_config()
@@ -332,7 +355,7 @@ def build_container() -> Container:
         vector_store=_build_vector_store(),
         reranker=_build_reranker(reranker_cfg),
         generation_provider=_build_generation_provider(generation_cfg),
-        audit_logger=FileAuditLogger(audit_log_path),
+        audit_logger=_build_audit_logger(),
         config_provider=config_provider,
     )
 
