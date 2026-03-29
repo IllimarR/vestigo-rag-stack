@@ -36,6 +36,7 @@
 - **Embedding**: Local models (e.g., sentence-transformers, E5) or via OpenAI-compatible embedding API
 - **Reranking**: Local cross-encoder models or LLM-as-reranker via any supported generation API
 - **Vector DB**: Start with ChromaDB or pgvector (abstracted behind [`VectorStoreRepository`](contracts.md#5-vectorstorerepository))
+- **Control-plane DB**: SQLite, accessed via SQLAlchemy 2.x. Backs the [`ConfigProvider`](contracts.md#9-configprovider), [`AuditLogger`](contracts.md#8-auditlogger), and API-key storage introduced in [Phase 4](phases.md#phase-4--admin-api-configprovider-persistence-and-operational-control-plane). Shared infrastructure lives in a `packages/control_plane/` package (sibling to `packages/contracts/`) — `Base`, engine factory, sessionmaker. File-backed (path via `CONTROL_PLANE_DB_PATH`) keeps the stack fully self-hostable with zero extra services; the SQLAlchemy boundary means swapping to Postgres later is a connection-string change, not a code change. Schema bootstrap is `Base.metadata.create_all()` for the prototype; Alembic is deferred until a real schema migration is needed.
 - **API framework**: REST framework with OpenAPI/Swagger support
 - **Containerization**: Docker / Docker Compose for local dev and deployment
 - **Testing**: Component-level and integration tests; contract compliance tests for each implementation

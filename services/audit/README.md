@@ -4,7 +4,7 @@
 
 | Contract | Protocol | Implementation |
 |---|---|---|
-| `AuditLogger` | `contracts.AuditLogger` | `application/file_audit_logger.py::FileAuditLogger` (Phase 1 ✓) |
+| `AuditLogger` | `contracts.AuditLogger` | `application/file_audit_logger.py::FileAuditLogger` (Phase 1 ✓), `application/sqlite_audit_logger.py::SqliteAuditLogger` (Phase 4 ✓) |
 
 ## Public surface
 
@@ -22,11 +22,18 @@ In-process library. No HTTP surface — Admin API calls `query_logs` via the
   `SUCCESS` / `PARTIAL` / `FAILED`; the ingest orchestrator writes one
   per `ChangeEvent` (`INGESTED` / `UPDATED` / `DELETED` / `SKIPPED`).
 
+## `SqliteAuditLogger` (`AUDIT_BACKEND=sqlite`)
+
+- Single `audit_events` table on the shared control-plane DB
+  (`CONTROL_PLANE_DB_PATH`). Indexed `type`, `timestamp`, `api_key_id`,
+  `status`, `event_type` columns + opaque JSON `payload`.
+- `query_logs` returns the same row shape as `FileAuditLogger` — file
+  and sqlite backends are interchangeable from the Admin API's
+  perspective.
+- Historical JSONL files are **not** migrated when an operator flips
+  `AUDIT_BACKEND=file → sqlite`. The JSONL file remains on disk; the
+  sqlite audit table starts empty.
+
 ## What is still missing
 
-Phase 4:
-
-- Database-backed `AuditLogger` (replaces the file-based implementation;
-  historical file-based logs are **not** migrated — acceptable for
-  prototype).
 - Richer query surface exposed through the Admin API.

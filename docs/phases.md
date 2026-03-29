@@ -15,7 +15,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | 1 | Foundation, Contracts, and Configuration Baseline | ✓ **Complete** |
 | 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
 | 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
-| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | Not started |
+| 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | In progress — control plane wired, ingest push + admin-ui pending |
 | 5 | Modularity Proof and Swap Demonstrations | Not started |
 | 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
 
@@ -48,6 +48,17 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **Contract compliance suites** — parameterized tests across backends: vector store (17 × N), chunker (13 × N), embedding provider (12 × N), source connector (13 × N), document converter (11 × N). New backends plug into the relevant `_*` dict and inherit the full suite.
 - ✓ **Composition root dispatch** — application-level contracts (`Chunker`, `EmbeddingProvider`) dispatch on `ConfigProvider` values per `docs/architecture.md` §Modularity Proof §4; infrastructure-level contracts (`VectorStoreRepository`, `SourceConnector`, `DocumentConverter`) dispatch on `.env`.
 - Deferred to later phases: HTTP trigger for the ingest pipeline (`ApiPushSourceConnector` routes — Phase 4); optional second `EmbeddingProvider` (local sentence-transformers) for the swap-test evidence — Phase 5.
+
+### Phase 4 progress
+
+- ✓ **Shared `packages/control_plane/`** — `Base`, `get_engine`, `make_session_factory`. SQLAlchemy 2.x. SQLite file at `CONTROL_PLANE_DB_PATH`. Foreign-keys pragma enabled on every connection. `import-linter` enforces that only `services.admin` and `services.audit` may touch the package, mirroring the vector-store contract.
+- ✓ **`SqliteConfigProvider`** — `CONFIG_BACKEND=sqlite` branch. Single `admin_config_entries` table (key + JSON value); on first run with an empty DB, seeds either from `CONFIG_FILE_PATH` (if present — the file→sqlite migration path) or from `DEFAULT_CONFIG`.
+- ✓ **`SqliteAuditLogger`** — `AUDIT_BACKEND=sqlite` branch. Single `audit_events` table with indexed `type`, `timestamp`, `api_key_id`, `status`, `event_type` columns + JSON payload; `query_logs` produces the same row shape as `FileAuditLogger`. JSONL history is *not* migrated.
+- ✓ **`ApiKeyStore`** — Protocol owned by the admin service, two implementations: `EnvApiKeyStore` (read-only env-seeded, default) and `SqliteApiKeyStore` (DB-backed CRUD with sha-256 hashed plaintext; plaintext returned exactly once on create). The gateway depends only on `store.as_resolver()` — no cross-service import.
+- ✓ **`ApiKeyVerifier`** refactored to `resolver + enforce` shape so both env and sqlite stores plug in without code duplication.
+- ✓ **Admin API endpoints** at `:8001/v1/` — `GET /config`, six per-section `PUT` writes (embedding, reranker, generation, chunking, rag-prompt-template, default-collection), `GET /audit?…`, `GET|POST /api-keys`, `DELETE /api-keys/{audit_id}`. Every write emits an admin audit event. Shared-secret bearer auth via `ADMIN_API_KEY` env (full per-user auth is a Phase 6 follow-up).
+- ✓ **Contract compliance suites** — `test_config_provider_contracts.py` (27 × N), `test_audit_logger_contracts.py` (20 × N), `test_api_key_store_contracts.py` (24 × N including the env/sqlite skip discipline). Admin routes covered by `test_admin_api_routes.py` (15 cases).
+- Deferred to remaining Phase 4 commits: `ApiPushSourceConnector` + ingest HTTP routes; the admin-ui Node.js + React scaffold on port 3000. Alembic remains deferred (schema is bootstrapped via `Base.metadata.create_all()` — adequate while no migrations exist).
 
 ### Phase 3 progress
 
@@ -128,9 +139,11 @@ This phase delivers the complete vertical slice: query-to-answer with client com
 
 ## Phase 4 — Admin API, ConfigProvider Persistence, and Operational Control Plane
 
+**Control-plane DB:** SQLite via SQLAlchemy 2.x. File-backed at `CONTROL_PLANE_DB_PATH` (env). Shared `Base`/engine/sessionmaker live in `packages/control_plane/` (sibling to `packages/contracts/`); admin and audit services own their own table classes against that shared `Base`. Schema bootstrap is `Base.metadata.create_all()` for the prototype; Alembic stays deferred until a real schema migration is needed. Chosen over Postgres to keep the stack fully self-hostable with zero extra services; SQLAlchemy is the swap boundary if a future deployment needs Postgres. Vector storage stays in ChromaDB — the control-plane DB is for config, audit, and API keys only.
+
 - Implement [Admin API](architecture.md#7-admin-ui--api) endpoints for API keys, model configuration, chunk settings, default collection, and RAG prompt template
-- Implement **database-backed [`ConfigProvider`](contracts.md#9-configprovider)** — replaces the file-based stub from Phase 1. Migration path: seed the database from the existing config file on first run.
-- Implement **database-backed [`AuditLogger`](contracts.md#8-auditlogger)** — replaces the file-based stub. Historical file-based logs are not migrated (acceptable for prototype).
+- Implement **SQLite-backed [`ConfigProvider`](contracts.md#9-configprovider)** (`CONFIG_BACKEND=sqlite`) — runs alongside `FileConfigProvider` rather than replacing it. Migration path: on first DB run, seed from the existing config file. The file backend stays as a valid choice for the simplest deployments.
+- Implement **SQLite-backed [`AuditLogger`](contracts.md#8-auditlogger)** (`AUDIT_BACKEND=sqlite`) — runs alongside `FileAuditLogger`. Historical JSONL logs are not migrated (acceptable for prototype).
 - Implement audit event querying for Admin use cases
 - Add OpenAPI documentation for Admin and Ingest APIs
 - Implement [`ApiPushSourceConnector`](contracts.md#1-sourceconnector) for the Ingest API
