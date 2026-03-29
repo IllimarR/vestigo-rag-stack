@@ -49,6 +49,7 @@ from dotenv import load_dotenv
 # Concrete implementations — imported only here, nowhere else.
 from services.admin.api import create_app as create_admin_app
 from services.admin.application.file_config_provider import FileConfigProvider
+from services.admin.application.sqlite_config_provider import SqliteConfigProvider
 from services.api_gateway.api import create_app as create_gateway_app
 from services.api_gateway.application.auth import ApiKeyVerifier, parse_allowed_keys
 from services.api_gateway.application.rag_pipeline_orchestrator import (
@@ -95,6 +96,7 @@ from services.vector_store.application.in_memory_vector_store import (
 
 DEFAULT_CONFIG_PATH = Path("./config/config.yaml")
 DEFAULT_AUDIT_LOG_PATH = Path("./data/audit.log")
+DEFAULT_CONTROL_PLANE_DB_PATH = Path("./data/control_plane.db")
 DEFAULT_CHROMADB_HOST = "chromadb"
 DEFAULT_CHROMADB_PORT = 8500
 DEFAULT_INGEST_FILESYSTEM_ROOT = Path("./data/incoming")
@@ -247,6 +249,31 @@ def _build_api_key_verifier() -> ApiKeyVerifier:
     return ApiKeyVerifier(allowed=allowed)
 
 
+def _build_config_provider() -> ConfigProvider:
+    """Dispatch on `CONFIG_BACKEND` env (infrastructure-level binding).
+
+    `file` (default) — `FileConfigProvider` reads/writes a YAML file at
+    `CONFIG_FILE_PATH`. Zero-dep, lives in git for thesis evidence runs.
+
+    `sqlite` — `SqliteConfigProvider` reads/writes the control-plane
+    SQLite DB at `CONTROL_PLANE_DB_PATH`. On first run with an empty DB,
+    the existing `CONFIG_FILE_PATH` is read for one-shot seeding so an
+    operator's tuning survives the file→sqlite hand-off; if no YAML
+    exists, the same `DEFAULT_CONFIG` defaults apply.
+    """
+
+    backend = os.getenv("CONFIG_BACKEND", "file").strip().lower()
+    config_file = _path("CONFIG_FILE_PATH", DEFAULT_CONFIG_PATH)
+    if backend in ("file", ""):
+        return FileConfigProvider(config_file)
+    if backend == "sqlite":
+        db_path = _path("CONTROL_PLANE_DB_PATH", DEFAULT_CONTROL_PLANE_DB_PATH)
+        return SqliteConfigProvider.from_path(db_path, seed_from_path=config_file)
+    raise ValueError(
+        f"unknown CONFIG_BACKEND={backend!r}; expected 'file' or 'sqlite'."
+    )
+
+
 def _build_embedding_provider(embedding_config: EmbeddingConfig) -> EmbeddingProvider:
     """Dispatch on `EmbeddingConfig.api_type` per architecture.md §Modularity Proof §4."""
     api_type = embedding_config.api_type.strip().lower()
@@ -278,7 +305,7 @@ def build_container() -> Container:
     backend) dispatch on `.env` values.
 
     Current status:
-      ✓ ConfigProvider       — file-based (YAML)
+      ✓ ConfigProvider       — file (YAML) OR sqlite (env-selected)
       ✓ AuditLogger          — file-based (JSONL)
       ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
       ✓ Chunker              — recursive (ConfigProvider method dispatch)
@@ -289,10 +316,9 @@ def build_container() -> Container:
       ✓ GenerationProvider   — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
     """
 
-    config_path = _path("CONFIG_FILE_PATH", DEFAULT_CONFIG_PATH)
     audit_log_path = _path("AUDIT_LOG_FILE", DEFAULT_AUDIT_LOG_PATH)
 
-    config_provider = FileConfigProvider(config_path)
+    config_provider = _build_config_provider()
     chunking = config_provider.get_chunking_config()
     embedding = config_provider.get_embedding_config()
     reranker_cfg = config_provider.get_reranker_config()
