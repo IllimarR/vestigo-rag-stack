@@ -91,7 +91,15 @@ class _FakeOrchestrator:
 
 def _client(*, allowed: dict[str, str] | None = None) -> tuple[TestClient, _FakeOrchestrator]:
     orchestrator = _FakeOrchestrator()
-    verifier = ApiKeyVerifier(allowed=allowed or {})
+    if allowed:
+        keys = dict(allowed)
+
+        def resolver(candidate: str) -> str | None:
+            return keys.get(candidate)
+
+        verifier = ApiKeyVerifier(resolver=resolver, enforce=True)
+    else:
+        verifier = ApiKeyVerifier.disabled()
     app = create_app(orchestrator, api_key_verifier=verifier)  # type: ignore[arg-type]
     return TestClient(app), orchestrator
 

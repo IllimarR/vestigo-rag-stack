@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
@@ -48,10 +49,12 @@ from dotenv import load_dotenv
 
 # Concrete implementations — imported only here, nowhere else.
 from services.admin.api import create_app as create_admin_app
+from services.admin.application.api_key_store import ApiKeyStore, EnvApiKeyStore
 from services.admin.application.file_config_provider import FileConfigProvider
+from services.admin.application.sqlite_api_key_store import SqliteApiKeyStore
 from services.admin.application.sqlite_config_provider import SqliteConfigProvider
 from services.api_gateway.api import create_app as create_gateway_app
-from services.api_gateway.application.auth import ApiKeyVerifier, parse_allowed_keys
+from services.api_gateway.application.auth import ApiKeyVerifier
 from services.api_gateway.application.rag_pipeline_orchestrator import (
     RAGPipelineOrchestrator,
 )
@@ -240,14 +243,41 @@ def _build_generation_provider(generation_config: GenerationConfig) -> Generatio
     )
 
 
-def _build_api_key_verifier() -> ApiKeyVerifier:
-    allowed = parse_allowed_keys(os.getenv("API_KEYS"))
-    if not allowed:
+def _build_api_key_store() -> ApiKeyStore:
+    """Dispatch on `API_KEY_BACKEND` env (infrastructure-level binding).
+
+    `env` (default) — `EnvApiKeyStore` reads `API_KEYS` at boot. Read-only.
+
+    `sqlite` — `SqliteApiKeyStore` reads from the control-plane DB. If
+    `API_KEYS` is *also* set, those entries are seeded into the DB (one-shot,
+    idempotent) so an operator switching from env to sqlite mid-life doesn't
+    lock themselves out.
+    """
+
+    backend = os.getenv("API_KEY_BACKEND", "env").strip().lower()
+    raw_env_keys = os.getenv("API_KEYS")
+    if backend in ("env", ""):
+        return EnvApiKeyStore.from_raw(raw_env_keys, now=datetime.now(UTC))
+    if backend == "sqlite":
+        db_path = _path("CONTROL_PLANE_DB_PATH", DEFAULT_CONTROL_PLANE_DB_PATH)
+        store = SqliteApiKeyStore.from_path(db_path)
+        store.seed_from_env(raw_env_keys)
+        return store
+    raise ValueError(
+        f"unknown API_KEY_BACKEND={backend!r}; expected 'env' or 'sqlite'."
+    )
+
+
+def _build_api_key_verifier(store: ApiKeyStore) -> ApiKeyVerifier:
+    keys = store.list_keys()
+    enforce = any(not k.revoked for k in keys)
+    if not enforce:
         print(
-            "[vestigo] WARNING: API_KEYS is empty; gateway runs in dev mode "
+            "[vestigo] WARNING: no API keys configured; gateway runs in dev mode "
             "and accepts unauthenticated requests."
         )
-    return ApiKeyVerifier(allowed=allowed)
+        return ApiKeyVerifier.disabled()
+    return ApiKeyVerifier(resolver=store.as_resolver(), enforce=True)
 
 
 def _build_audit_logger() -> AuditLogger:
@@ -413,13 +443,15 @@ async def serve_all() -> None:
     container = build_container()
     rag_orchestrator = build_orchestrator(container)
     ingest_orchestrator = build_ingest_orchestrator(container)
-    api_key_verifier = _build_api_key_verifier()
+    api_key_store = _build_api_key_store()
+    api_key_verifier = _build_api_key_verifier(api_key_store)
 
     gateway_app = create_gateway_app(rag_orchestrator, api_key_verifier=api_key_verifier)
     ingest_app = create_ingest_app(ingest_orchestrator)
     admin_app = create_admin_app(
         config_provider=container.config_provider,
         audit_logger=container.audit_logger,
+        api_key_store=api_key_store,
     )
 
     await asyncio.gather(

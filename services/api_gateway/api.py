@@ -45,7 +45,7 @@ def create_app(
             "streaming responses, plus Bearer-token auth."
         ),
     )
-    verifier = api_key_verifier or ApiKeyVerifier(allowed={})
+    verifier = api_key_verifier or ApiKeyVerifier.disabled()
 
     app.state.orchestrator = orchestrator
     app.state.api_key_verifier = verifier

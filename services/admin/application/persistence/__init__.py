@@ -7,6 +7,6 @@ in the composition root materialises both admin and audit schemas.
 
 from __future__ import annotations
 
-from services.admin.application.persistence.models import ConfigEntry
+from services.admin.application.persistence.models import ApiKey, ConfigEntry
 
-__all__ = ["ConfigEntry"]
+__all__ = ["ApiKey", "ConfigEntry"]

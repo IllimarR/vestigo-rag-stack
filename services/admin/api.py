@@ -1,16 +1,19 @@
 """Public HTTP surface for the Admin API.
 
 Today only `/health` and OpenAPI docs are exposed; the
-`ConfigProvider` and `AuditLogger` are bound on `app.state` so Phase 4
-routes (API key management, model configuration, chunk settings,
-default collection, RAG prompt template management, and audit log
-querying) can drive them without rewiring the composition root.
+`ConfigProvider`, `AuditLogger`, and `ApiKeyStore` are bound on
+`app.state` so the Phase 4 routes (API key management, model
+configuration, chunk settings, default collection, RAG prompt
+template management, and audit log querying) can drive them without
+rewiring the composition root.
 """
 
 from __future__ import annotations
 
 from contracts import AuditLogger, ConfigProvider
 from fastapi import FastAPI
+
+from services.admin.application.api_key_store import ApiKeyStore
 
 __all__ = ["create_app"]
 
@@ -19,6 +22,7 @@ def create_app(
     *,
     config_provider: ConfigProvider,
     audit_logger: AuditLogger,
+    api_key_store: ApiKeyStore,
 ) -> FastAPI:
     app = FastAPI(
         title="Vestigo Admin API",
@@ -32,6 +36,7 @@ def create_app(
 
     app.state.config_provider = config_provider
     app.state.audit_logger = audit_logger
+    app.state.api_key_store = api_key_store
 
     @app.get("/health")
     def health() -> dict[str, str]:

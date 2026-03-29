@@ -10,10 +10,10 @@ from datetime import datetime
 from typing import Any
 
 from control_plane import Base
-from sqlalchemy import JSON, DateTime, String
+from sqlalchemy import JSON, Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-__all__ = ["ConfigEntry"]
+__all__ = ["ApiKey", "ConfigEntry"]
 
 
 class ConfigEntry(Base):
@@ -36,3 +36,26 @@ class ConfigEntry(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[Any] = mapped_column(JSON, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ApiKey(Base):
+    """One row per issued API key.
+
+    The plaintext key is never persisted — only its SHA-256 hash. The
+    admin UI can prove a key is valid (by hashing a candidate and
+    comparing) and can show operators a stable identifier (`audit_id`),
+    but a database leak does not expose any usable key.
+
+    `audit_id` is the value the gateway records on every authenticated
+    request via the AuditLogger contract. It is intentionally
+    short-lived-friendly: an admin can revoke a key by ID without
+    knowing its plaintext.
+    """
+
+    __tablename__ = "admin_api_keys"
+
+    audit_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

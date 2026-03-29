@@ -46,6 +46,7 @@ from main import (
     build_orchestrator,
 )
 from services.admin.api import create_app as create_admin_app
+from services.admin.application.api_key_store import EnvApiKeyStore
 from services.admin.application.file_config_provider import (
     DEFAULT_CONFIG,
     FileConfigProvider,
@@ -262,11 +263,16 @@ def test_ingest_api_health(tmp_path: Path) -> None:
         assert r.json()["service"] == "ingest"
 
 
+def _empty_api_key_store() -> EnvApiKeyStore:
+    return EnvApiKeyStore.from_raw(None, now=datetime(2026, 4, 25, 10, 0, 0))
+
+
 def test_admin_api_health(tmp_path: Path) -> None:
     container = _container_in(tmp_path)
     app = create_admin_app(
         config_provider=container.config_provider,
         audit_logger=container.audit_logger,
+        api_key_store=_empty_api_key_store(),
     )
     with TestClient(app) as client:
         r = client.get("/health")
@@ -282,6 +288,7 @@ def test_openapi_docs_available(tmp_path: Path) -> None:
         create_admin_app(
             config_provider=container.config_provider,
             audit_logger=container.audit_logger,
+            api_key_store=_empty_api_key_store(),
         ),
     ]
     for app in apps:
