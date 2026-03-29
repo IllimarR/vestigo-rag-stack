@@ -74,12 +74,15 @@ curl http://localhost:8001/health   # Admin API
 curl http://localhost:8002/health   # Ingest API
 ```
 
-All nine contracts now have real bindings. The default seed config
-(`config.yaml`) points the generation provider at Ollama on
-`http://localhost:11434/v1` and the embedding provider similarly; bring
-your own OpenAI-compatible endpoint if you don't have Ollama running.
-See [Implementation Phases](docs/phases.md) for what landed in which
-phase.
+All nine contracts now have real bindings, Phase 4 added a second
+implementation for the persistence-flavoured ones (SQLite-backed
+`ConfigProvider`, `AuditLogger`, and API key store), an ingest push
+flow, and the Admin API surface that drives them. The default seed
+config (`config.yaml`) points the generation provider at Ollama on
+`http://localhost:11434/v1` and the embedding provider similarly;
+bring your own OpenAI-compatible endpoint if you don't have Ollama
+running. See [Implementation Phases](docs/phases.md) for what landed
+in which phase.
 
 Quick smoke test:
 
@@ -89,6 +92,21 @@ curl -s http://localhost:8000/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{"input": "hello", "stream": false}'
 ```
+
+### Admin UI (port 3000)
+
+The Vite + React control plane talks to the Admin API on `:8001`.
+
+```bash
+cd admin-ui
+npm install
+npm run dev      # http://localhost:3000
+```
+
+Set the admin bearer (`ADMIN_API_KEY` from your `.env`) in the auth
+bar in the UI header to unlock the API keys, configuration, and audit
+views. See [admin-ui/README.md](admin-ui/README.md) for layout and
+scripts.
 
 ### Docker Compose (planned)
 
