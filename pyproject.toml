@@ -21,6 +21,7 @@ dependencies = [
     "httpx>=0.28",
     "markitdown>=0.0.1",
     "sentence-transformers>=3.0",
+    "sqlalchemy>=2.0",
 ]
 
 [dependency-groups]
@@ -34,7 +35,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/contracts", "services"]
+packages = ["packages/contracts", "packages/control_plane", "services"]
 
 [tool.mypy]
 python_version = "3.12"

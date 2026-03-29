@@ -1,6 +1,7 @@
 [importlinter]
 root_packages =
     contracts
+    control_plane
     services
 include_external_packages = True
 
@@ -9,6 +10,15 @@ name = contracts depends on nothing project-owned
 type = forbidden
 source_modules =
     contracts
+forbidden_modules =
+    control_plane
+    services
+
+[importlinter:contract:control-plane-is-sink]
+name = control_plane infra package depends on nothing project-owned
+type = forbidden
+source_modules =
+    control_plane
 forbidden_modules =
     services
 
@@ -37,6 +47,16 @@ source_modules =
 forbidden_modules =
     chromadb
     pgvector
-    psycopg
-    psycopg2
+
+[importlinter:contract:control-plane-db-is-admin-and-audit-only]
+name = Only services.admin and services.audit may touch the control-plane DB
+type = forbidden
+source_modules =
+    services.ingest
+    services.retrieval
+    services.llm
+    services.api_gateway
+    services.vector_store
+forbidden_modules =
     sqlalchemy
+    control_plane
