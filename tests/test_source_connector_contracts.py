@@ -17,6 +17,9 @@ from pathlib import Path
 import pytest
 from contracts import ChangeType, SourceConnector
 
+from services.ingest.application.api_push_source_connector import (
+    ApiPushSourceConnector,
+)
 from services.ingest.application.filesystem_source_connector import (
     FilesystemSourceConnector,
 )
@@ -48,8 +51,38 @@ def _filesystem_factory(tmp_path: Path) -> tuple[SourceConnector, _Harness]:
     return connector, _Harness(write=write, delete=delete)
 
 
+def _api_push_factory(_tmp_path: Path) -> tuple[SourceConnector, _Harness]:
+    """Push connector adapted to the parameterized harness shape.
+
+    The filesystem connector's "write" overload covers two cases: a
+    first write (ADDED) and an in-place rewrite (MODIFIED). The push
+    connector decides between the two by tracking whether `document_id`
+    has been seen before — `push_document` returns ADDED on first
+    sight and MODIFIED on every subsequent call. The harness `write`
+    just calls `push_document` and lets the connector decide.
+    """
+
+    connector = ApiPushSourceConnector(source_id="api")
+
+    def write(doc_id: str, content: bytes) -> None:
+        filename = doc_id.rsplit("/", 1)[-1]
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        connector.push_document(
+            document_id=doc_id,
+            filename=filename,
+            file_type=ext,
+            content=content,
+        )
+
+    def delete(doc_id: str) -> None:
+        connector.push_deletion(document_id=doc_id)
+
+    return connector, _Harness(write=write, delete=delete)
+
+
 _CONNECTORS: dict[str, _ConnectorFactory] = {
     "filesystem": _filesystem_factory,
+    "api_push": _api_push_factory,
 }
 
 

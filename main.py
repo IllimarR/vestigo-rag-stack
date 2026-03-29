@@ -61,6 +61,9 @@ from services.api_gateway.application.rag_pipeline_orchestrator import (
 from services.audit.application.file_audit_logger import FileAuditLogger
 from services.audit.application.sqlite_audit_logger import SqliteAuditLogger
 from services.ingest.api import create_app as create_ingest_app
+from services.ingest.application.api_push_source_connector import (
+    ApiPushSourceConnector,
+)
 from services.ingest.application.filesystem_source_connector import (
     FilesystemSourceConnector,
 )
@@ -156,10 +159,14 @@ def _build_source_connector() -> SourceConnector:
         return FilesystemSourceConnector(
             root=_path("INGEST_FILESYSTEM_ROOT", DEFAULT_INGEST_FILESYSTEM_ROOT),
         )
+    if selected == "api":
+        return ApiPushSourceConnector(
+            source_id=os.getenv("API_PUSH_SOURCE_ID", "api"),
+        )
     if selected in ("placeholder", "none"):
         return NotImplementedSourceConnector()
     raise ValueError(
-        f"unsupported SOURCE_CONNECTORS={selected!r}; available: 'filesystem'. "
+        f"unsupported SOURCE_CONNECTORS={selected!r}; available: 'filesystem', 'api'. "
         "Add a new `SourceConnector` implementation under services/ingest/application/."
     )
 
@@ -447,7 +454,11 @@ async def serve_all() -> None:
     api_key_verifier = _build_api_key_verifier(api_key_store)
 
     gateway_app = create_gateway_app(rag_orchestrator, api_key_verifier=api_key_verifier)
-    ingest_app = create_ingest_app(ingest_orchestrator)
+    ingest_app = create_ingest_app(
+        ingest_orchestrator,
+        source_connector=container.source_connector,
+        config_provider=container.config_provider,
+    )
     admin_app = create_admin_app(
         config_provider=container.config_provider,
         audit_logger=container.audit_logger,
