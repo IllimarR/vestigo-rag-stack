@@ -6,7 +6,7 @@
 |---|---|---|
 | `SourceConnector` | `contracts.SourceConnector` | `application/filesystem_source_connector.py::FilesystemSourceConnector` (Phase 2 ✓), `application/api_push_source_connector.py::ApiPushSourceConnector` (Phase 4 ✓) |
 | `DocumentConverter` | `contracts.DocumentConverter` | `application/markitdown_document_converter.py::MarkitdownDocumentConverter` (Phase 2 ✓) |
-| `Chunker` | `contracts.Chunker` | `application/recursive_chunker.py::RecursiveChunker` (Phase 2 ✓) |
+| `Chunker` | `contracts.Chunker` | `application/recursive_chunker.py::RecursiveChunker` (Phase 2 ✓), `application/fixed_size_chunker.py::FixedSizeChunker` (Phase 5 ✓) |
 
 ## Public surface
 
@@ -107,10 +107,28 @@ external boundary.
 - Accepts only `ChunkConfig.method == "recursive"` — the composition root
   dispatches other methods to other implementations.
 
+### `FixedSizeChunker` (Phase 5)
+
+- The simplest possible chunker: pure sliding window with stride
+  `size - overlap` and no boundary heuristics. Cuts mid-word if that's
+  where the window ends.
+- Same `Chunk.start` / `Chunk.end` / verbatim-slice invariant as the
+  recursive chunker, so downstream stages can't tell which backend
+  produced a chunk.
+- Exists for the Phase 5 modularity proof: it makes the
+  `ChunkConfig.method` dispatch story visually obvious by parking the
+  two chunkers side by side. Same orchestrator, same config DTO,
+  different behaviour driven entirely by one string.
+- Composition root dispatches this adapter when
+  `ChunkConfig.method == "fixed_size"`.
+
 ## Contract compliance
 
 - `tests/test_chunker_contracts.py` — parameterized over every registered
-  chunker via `_CHUNKERS`. Current entries: `recursive`.
+  chunker via `_CHUNKERS`. Current entries: `recursive`, `fixed_size`.
+  The same 12 expectations (empty input, monotonic ordering, full
+  coverage, overlap, config validation, method dispatch, ...) run
+  against both backends.
 - `tests/test_source_connector_contracts.py` — parameterized over every
   registered connector via `_CONNECTORS`. Current entries: `filesystem`,
   `api_push`. The harness abstracts write/delete so future connectors

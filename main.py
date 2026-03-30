@@ -67,6 +67,7 @@ from services.ingest.application.api_push_source_connector import (
 from services.ingest.application.filesystem_source_connector import (
     FilesystemSourceConnector,
 )
+from services.ingest.application.fixed_size_chunker import FixedSizeChunker
 from services.ingest.application.ingest_pipeline_orchestrator import (
     IngestPipelineOrchestrator,
 )
@@ -212,10 +213,12 @@ def _build_chunker(chunk_config: ChunkConfig) -> Chunker:
     method = chunk_config.method.strip().lower()
     if method == "recursive":
         return RecursiveChunker()
+    if method in ("fixed_size", "fixed-size"):
+        return FixedSizeChunker()
     if method in ("placeholder", "none", ""):
         return NotImplementedChunker()
     raise ValueError(
-        f"unsupported chunking method={method!r}; available: 'recursive'. "
+        f"unsupported chunking method={method!r}; available: 'recursive', 'fixed_size'. "
         "Add a new `Chunker` implementation under services/ingest/application/."
     )
 
@@ -416,7 +419,7 @@ def build_container() -> Container:
       ✓ ConfigProvider       — file (YAML) OR sqlite (env-selected)
       ✓ AuditLogger          — file (JSONL) OR sqlite (env-selected)
       ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
-      ✓ Chunker              — recursive (ConfigProvider method dispatch)
+      ✓ Chunker              — recursive OR fixed_size (ConfigProvider method dispatch)
       ✓ EmbeddingProvider    — OpenAI HTTP OR sentence-transformers
                                 (ConfigProvider api_type dispatch)
       ✓ SourceConnector      — filesystem (env-selected)

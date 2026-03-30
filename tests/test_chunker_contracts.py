@@ -12,12 +12,14 @@ from datetime import datetime
 import pytest
 from contracts import Chunk, ChunkConfig, Chunker, DocumentReference
 
+from services.ingest.application.fixed_size_chunker import FixedSizeChunker
 from services.ingest.application.recursive_chunker import RecursiveChunker
 
 ChunkerFactory = Callable[[], Chunker]
 
 _CHUNKERS: dict[str, ChunkerFactory] = {
     "recursive": RecursiveChunker,
+    "fixed_size": FixedSizeChunker,
 }
 
 
