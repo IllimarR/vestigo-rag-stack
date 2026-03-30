@@ -6,7 +6,7 @@
 |---|---|---|
 | `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) <br>`application/sentence_transformers_embedding_provider.py::SentenceTransformersEmbeddingProvider` (Phase 5 ✓) |
 | `Reranker` | `contracts.Reranker` | `application/cross_encoder_reranker.py::CrossEncoderReranker` (Phase 3 ✓) <br>`application/llm_reranker.py::LLMReranker` (Phase 5 ✓) |
-| `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) |
+| `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) <br>`application/anthropic_generation_provider.py::AnthropicGenerationProvider` (Phase 5 ✓) |
 
 ## Public surface
 
@@ -99,6 +99,32 @@ and the ingest pipeline.
 - Composition root dispatches this adapter when
   `ConfigProvider.get_generation_config().api_type == "openai-compatible"`.
 
+### `AnthropicGenerationProvider` (Phase 5)
+
+- Speaks Anthropic's native Messages API (`/v1/messages`) rather than
+  the OpenAI shape — the second generation backend gives the thesis
+  swap evidence its strongest case because the wire protocol itself
+  diverges, not just the model behind it. Hand-rolled HTTPX, no
+  `anthropic` SDK dependency.
+- Five wire-protocol differences from `OpenAIHttpGenerationProvider`,
+  each enforced by a test:
+  - Endpoint `/v1/messages`, not `/v1/chat/completions`.
+  - Headers `x-api-key` + `anthropic-version` — no Bearer.
+  - `system` is a top-level body field (Anthropic rejects
+    role='system' inside `messages`).
+  - `max_tokens` is required; the adapter defaults to 4096 if the
+    caller didn't set one.
+  - SSE stream is event-typed (`message_start`, `content_block_delta`,
+    `message_delta`, `message_stop`). Text deltas come from
+    `content_block_delta` with `delta.type == "text_delta"`. Input
+    tokens arrive in `message_start`, output tokens in `message_delta`;
+    the adapter accumulates both and emits a usage-bearing final chunk
+    on `message_stop`.
+- Composition root dispatches this adapter when
+  `ConfigProvider.get_generation_config().api_type == "anthropic"`.
+  An `api_key` is mandatory — Anthropic does not allow anonymous
+  requests, so `_build_generation_provider` refuses to bind without one.
+
 ## Contract compliance
 
 - `tests/test_embedding_provider_contracts.py` — parameterized over every
@@ -107,8 +133,12 @@ and the ingest pipeline.
   a deterministic fake encoder so the suite stays torch-free.
 - `tests/test_generation_provider_contracts.py` — parameterized over every
   registered `GenerationProvider` via `_PROVIDERS`. Current entries:
-  `openai_http`. Covers unary + SSE streaming + system-prompt placement +
-  parameter forwarding + Bearer auth.
+  `openai_http`, `anthropic`. Each backend gets its own
+  `httpx.MockTransport` matching the wire shape it expects (OpenAI's
+  `/v1/chat/completions` SSE vs Anthropic's event-typed
+  `/v1/messages` stream). Covers unary + SSE streaming +
+  system-prompt placement + parameter forwarding + auth conventions
+  (Bearer vs `x-api-key`).
 - `tests/test_reranker_contracts.py` — parameterized over every registered
   `Reranker` via `_RERANKERS`. Current entries: `cross_encoder`, `llm`.
   Tests inject a fake `Scorer` (cross-encoder) or a scorer-backed fake
@@ -121,7 +151,7 @@ Phase 5 (modularity proof second adapters):
 
 - ✓ Local embedding provider (`SentenceTransformersEmbeddingProvider`).
 - ✓ LLM-as-reranker (`LLMReranker`) — composes `GenerationProvider`.
-- Anthropic-API `GenerationProvider` for the generation-side swap.
+- ✓ Anthropic-API `GenerationProvider` (`AnthropicGenerationProvider`).
 
 Each of the three stages is **independently configurable** via `ConfigProvider`;
 no adapter here may share transport with another.

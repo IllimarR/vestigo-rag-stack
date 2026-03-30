@@ -25,6 +25,9 @@ from contracts import (
     Role,
 )
 
+from services.llm.application.anthropic_generation_provider import (
+    AnthropicGenerationProvider,
+)
 from services.llm.application.openai_http_generation_provider import (
     OpenAIHttpGenerationProvider,
 )
@@ -103,8 +106,114 @@ def _openai_http_factory() -> Factory:
     return build
 
 
+# --- Mock Anthropic /v1/messages server ------------------------------------
+
+
+def _build_anthropic_stream_body(deltas: list[str]) -> bytes:
+    """Render Anthropic's SSE stream from text deltas.
+
+    Mirrors what `claude-3-5-sonnet`-class endpoints emit: a
+    `message_start` opens the stream with `input_tokens`, each delta is
+    a `content_block_delta/text_delta` event, `message_delta` reports
+    `output_tokens`, and `message_stop` closes it.
+    """
+    def event(event_type: str, payload: dict[str, Any]) -> str:
+        return f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
+
+    parts: list[str] = [
+        event(
+            "message_start",
+            {"type": "message_start", "message": {"usage": {"input_tokens": 5}}},
+        ),
+        event(
+            "content_block_start",
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            },
+        ),
+    ]
+    for delta in deltas:
+        parts.append(
+            event(
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": delta},
+                },
+            )
+        )
+    parts.append(
+        event(
+            "content_block_stop",
+            {"type": "content_block_stop", "index": 0},
+        )
+    )
+    parts.append(
+        event(
+            "message_delta",
+            {"type": "message_delta", "usage": {"output_tokens": len(deltas)}},
+        )
+    )
+    parts.append(event("message_stop", {"type": "message_stop"}))
+    return "".join(parts).encode()
+
+
+def _stub_anthropic_transport() -> httpx.MockTransport:
+    """Echo the last user message via Anthropic's content-block shape."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if not request.url.path.endswith("/messages"):
+            return httpx.Response(404, json={"error": "not found"})
+
+        body: dict[str, Any] = json.loads(request.content)
+        is_stream = bool(body.get("stream"))
+        user_messages = [m for m in body["messages"] if m["role"] == "user"]
+        echo_text = user_messages[-1]["content"] if user_messages else ""
+
+        if is_stream:
+            deltas = list(echo_text) or [""]
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                content=_build_anthropic_stream_body(deltas),
+            )
+
+        return httpx.Response(
+            200,
+            json={
+                "id": "msg_stub",
+                "type": "message",
+                "role": "assistant",
+                "model": body["model"],
+                "content": [{"type": "text", "text": echo_text}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 5, "output_tokens": len(echo_text)},
+            },
+        )
+
+    return httpx.MockTransport(handler)
+
+
+def _anthropic_factory() -> Factory:
+    def build() -> GenerationProvider:
+        transport = _stub_anthropic_transport()
+        client = httpx.Client(transport=transport, base_url="http://stub")
+        return AnthropicGenerationProvider(
+            endpoint="http://stub/v1",
+            model_name="stub-claude",
+            api_key="sk-ant-test",
+            client=client,
+        )
+
+    return build
+
+
 _PROVIDERS: dict[str, Factory] = {
     "openai_http": _openai_http_factory(),
+    "anthropic": _anthropic_factory(),
 }
 
 
@@ -251,3 +360,150 @@ def test_openai_http_sends_bearer_when_api_key_set() -> None:
     provider.generate(_request(user="x"))
 
     assert captured["auth"] == "Bearer sk-test"
+
+
+# --- Anthropic-specific wire-protocol checks --------------------------------
+
+
+def _anthropic_capture_handler(
+    captured: dict[str, Any],
+) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = dict(request.headers)
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "id": "x",
+                "type": "message",
+                "role": "assistant",
+                "model": "stub-claude",
+                "content": [{"type": "text", "text": "ok"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            },
+        )
+
+    return handler
+
+
+def test_anthropic_lifts_system_to_top_level() -> None:
+    """System prompts go to `body.system`, never into `messages`.
+
+    Anthropic actively rejects role='system' entries inside `messages`,
+    so this isn't a stylistic choice — getting it wrong breaks the wire.
+    """
+    captured: dict[str, Any] = {}
+    client = httpx.Client(
+        transport=httpx.MockTransport(_anthropic_capture_handler(captured)),
+        base_url="http://stub",
+    )
+    provider = AnthropicGenerationProvider(
+        endpoint="http://stub/v1",
+        model_name="stub-claude",
+        api_key="sk-ant-test",
+        client=client,
+    )
+
+    provider.generate(_request(user="hi", system="be terse"))
+
+    body = captured["body"]
+    assert body["system"] == "be terse"
+    assert all(m["role"] != "system" for m in body["messages"])
+    assert body["messages"][0] == {"role": "user", "content": "hi"}
+
+
+def test_anthropic_sends_x_api_key_and_version_headers() -> None:
+    """Bearer auth is OpenAI-shaped; Anthropic uses `x-api-key` + version."""
+    captured: dict[str, Any] = {}
+    client = httpx.Client(
+        transport=httpx.MockTransport(_anthropic_capture_handler(captured)),
+        base_url="http://stub",
+    )
+    provider = AnthropicGenerationProvider(
+        endpoint="http://stub/v1",
+        model_name="stub-claude",
+        api_key="sk-ant-test",
+        client=client,
+    )
+
+    provider.generate(_request(user="hi"))
+
+    headers = captured["headers"]
+    assert headers["x-api-key"] == "sk-ant-test"
+    assert headers["anthropic-version"]  # any non-empty version
+    assert "authorization" not in headers  # explicitly no Bearer
+
+
+def test_anthropic_applies_default_max_tokens_when_missing() -> None:
+    """Anthropic requires `max_tokens`; the adapter must inject a default."""
+    captured: dict[str, Any] = {}
+    client = httpx.Client(
+        transport=httpx.MockTransport(_anthropic_capture_handler(captured)),
+        base_url="http://stub",
+    )
+    provider = AnthropicGenerationProvider(
+        endpoint="http://stub/v1",
+        model_name="stub-claude",
+        api_key="sk-ant-test",
+        default_max_tokens=2048,
+        client=client,
+    )
+
+    provider.generate(_request(user="hi"))
+
+    assert captured["body"]["max_tokens"] == 2048
+
+
+def test_anthropic_forwards_explicit_max_tokens() -> None:
+    captured: dict[str, Any] = {}
+    client = httpx.Client(
+        transport=httpx.MockTransport(_anthropic_capture_handler(captured)),
+        base_url="http://stub",
+    )
+    provider = AnthropicGenerationProvider(
+        endpoint="http://stub/v1",
+        model_name="stub-claude",
+        api_key="sk-ant-test",
+        client=client,
+    )
+
+    provider.generate(_request(user="hi", max_tokens=42))
+
+    assert captured["body"]["max_tokens"] == 42
+
+
+def test_anthropic_response_concatenates_text_blocks() -> None:
+    """Anthropic's `content` is a list of typed blocks; only `text` blocks contribute."""
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "id": "x",
+                "type": "message",
+                "role": "assistant",
+                "model": "stub-claude",
+                "content": [
+                    {"type": "text", "text": "Hello "},
+                    {"type": "tool_use", "name": "skip_me"},
+                    {"type": "text", "text": "world"},
+                ],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 3, "output_tokens": 2},
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://stub")
+    provider = AnthropicGenerationProvider(
+        endpoint="http://stub/v1",
+        model_name="stub-claude",
+        api_key="sk-ant-test",
+        client=client,
+    )
+
+    response = provider.generate(_request(user="x"))
+
+    assert response.text == "Hello world"
+    assert response.usage.prompt_tokens == 3
+    assert response.usage.completion_tokens == 2

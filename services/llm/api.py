@@ -7,6 +7,9 @@ exposes implementations of `EmbeddingProvider`, `Reranker`, and
 
 from __future__ import annotations
 
+from services.llm.application.anthropic_generation_provider import (
+    AnthropicGenerationProvider,
+)
 from services.llm.application.cross_encoder_reranker import (
     CrossEncoderReranker,
     sentence_transformers_scorer,
@@ -29,6 +32,7 @@ from services.llm.application.sentence_transformers_embedding_provider import (
 )
 
 __all__ = [
+    "AnthropicGenerationProvider",
     "CrossEncoderReranker",
     "LLMReranker",
     "NotImplementedEmbeddingProvider",

@@ -79,6 +79,9 @@ from services.ingest.application.placeholders import (
     NotImplementedSourceConnector,
 )
 from services.ingest.application.recursive_chunker import RecursiveChunker
+from services.llm.application.anthropic_generation_provider import (
+    AnthropicGenerationProvider,
+)
 from services.llm.application.cross_encoder_reranker import (
     CrossEncoderReranker,
     sentence_transformers_scorer,
@@ -251,13 +254,24 @@ def _build_reranker(
 def _build_generation_provider(generation_config: GenerationConfig) -> GenerationProvider:
     """Dispatch on `GenerationConfig.api_type` per architecture.md §Modularity Proof §4."""
     api_type = generation_config.api_type.strip().lower()
+    params = generation_config.parameters or {}
+    maybe_key = params.get("api_key")
+    api_key: str | None = maybe_key if isinstance(maybe_key, str) and maybe_key else None
+
     if api_type in ("openai", "openai-compatible", "openai_compatible"):
-        api_key = None
-        params = generation_config.parameters or {}
-        maybe_key = params.get("api_key")
-        if isinstance(maybe_key, str) and maybe_key:
-            api_key = maybe_key
         return OpenAIHttpGenerationProvider(
+            endpoint=generation_config.endpoint,
+            model_name=generation_config.model_name,
+            api_key=api_key,
+        )
+    if api_type == "anthropic":
+        if not api_key:
+            raise ValueError(
+                "generation.api_type='anthropic' requires "
+                "generation.parameters.api_key (Anthropic does not allow "
+                "anonymous requests)."
+            )
+        return AnthropicGenerationProvider(
             endpoint=generation_config.endpoint,
             model_name=generation_config.model_name,
             api_key=api_key,
@@ -265,7 +279,8 @@ def _build_generation_provider(generation_config: GenerationConfig) -> Generatio
     if api_type in ("placeholder", "none", ""):
         return NotImplementedGenerationProvider()
     raise ValueError(
-        f"unsupported generation api_type={api_type!r}; available: 'openai-compatible'. "
+        f"unsupported generation api_type={api_type!r}; available: "
+        "'openai-compatible', 'anthropic'. "
         "Add a new `GenerationProvider` implementation under services/llm/application/."
     )
 
@@ -407,7 +422,7 @@ def build_container() -> Container:
       ✓ SourceConnector      — filesystem (env-selected)
       ✓ DocumentConverter    — markitdown (env-selected)
       ✓ Reranker             — cross-encoder OR llm (ConfigProvider type dispatch)
-      ✓ GenerationProvider   — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
+      ✓ GenerationProvider   — OpenAI HTTP OR Anthropic (ConfigProvider api_type dispatch)
     """
 
     config_provider = _build_config_provider()
