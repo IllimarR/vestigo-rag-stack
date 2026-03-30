@@ -83,6 +83,7 @@ from services.llm.application.cross_encoder_reranker import (
     CrossEncoderReranker,
     sentence_transformers_scorer,
 )
+from services.llm.application.llm_reranker import LLMReranker
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
 )
@@ -216,18 +217,33 @@ def _build_chunker(chunk_config: ChunkConfig) -> Chunker:
     )
 
 
-def _build_reranker(reranker_config: RerankerConfig) -> Reranker:
-    """Dispatch on `RerankerConfig.type` per architecture.md §Modularity Proof §4."""
+def _build_reranker(
+    reranker_config: RerankerConfig,
+    *,
+    generation_provider: GenerationProvider,
+) -> Reranker:
+    """Dispatch on `RerankerConfig.type` per architecture.md §Modularity Proof §4.
+
+    The `llm` branch borrows the already-bound `GenerationProvider` to act
+    as a zero-shot relevance judge — see `LLMReranker`. That is the
+    canonical example of one contract composing another at the
+    composition root.
+    """
     rtype = reranker_config.type.strip().lower()
     if rtype in ("cross_encoder", "cross-encoder"):
         return CrossEncoderReranker(
             scorer=sentence_transformers_scorer(reranker_config.model_name),
             model_name=reranker_config.model_name,
         )
+    if rtype == "llm":
+        return LLMReranker(
+            generation_provider=generation_provider,
+            model_name=reranker_config.model_name,
+        )
     if rtype in ("placeholder", "none", ""):
         return NotImplementedReranker()
     raise ValueError(
-        f"unsupported reranker type={rtype!r}; available: 'cross_encoder'. "
+        f"unsupported reranker type={rtype!r}; available: 'cross_encoder', 'llm'. "
         "Add a new `Reranker` implementation under services/llm/application/."
     )
 
@@ -390,7 +406,7 @@ def build_container() -> Container:
                                 (ConfigProvider api_type dispatch)
       ✓ SourceConnector      — filesystem (env-selected)
       ✓ DocumentConverter    — markitdown (env-selected)
-      ✓ Reranker             — cross-encoder (ConfigProvider type dispatch)
+      ✓ Reranker             — cross-encoder OR llm (ConfigProvider type dispatch)
       ✓ GenerationProvider   — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
     """
 
@@ -400,14 +416,18 @@ def build_container() -> Container:
     reranker_cfg = config_provider.get_reranker_config()
     generation_cfg = config_provider.get_generation_config()
 
+    # Build the generation provider before the reranker so the
+    # `LLMReranker` branch can compose it as its judge.
+    generation_provider = _build_generation_provider(generation_cfg)
+
     return Container(
         source_connector=_build_source_connector(),
         document_converter=_build_document_converter(),
         chunker=_build_chunker(chunking),
         embedding_provider=_build_embedding_provider(embedding),
         vector_store=_build_vector_store(),
-        reranker=_build_reranker(reranker_cfg),
-        generation_provider=_build_generation_provider(generation_cfg),
+        reranker=_build_reranker(reranker_cfg, generation_provider=generation_provider),
+        generation_provider=generation_provider,
         audit_logger=_build_audit_logger(),
         config_provider=config_provider,
     )

@@ -11,6 +11,7 @@ from services.llm.application.cross_encoder_reranker import (
     CrossEncoderReranker,
     sentence_transformers_scorer,
 )
+from services.llm.application.llm_reranker import LLMReranker
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
 )
@@ -29,6 +30,7 @@ from services.llm.application.sentence_transformers_embedding_provider import (
 
 __all__ = [
     "CrossEncoderReranker",
+    "LLMReranker",
     "NotImplementedEmbeddingProvider",
     "NotImplementedGenerationProvider",
     "NotImplementedReranker",

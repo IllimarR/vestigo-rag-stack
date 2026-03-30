@@ -5,7 +5,7 @@
 | Contract | Protocol | Implementation |
 |---|---|---|
 | `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) <br>`application/sentence_transformers_embedding_provider.py::SentenceTransformersEmbeddingProvider` (Phase 5 ✓) |
-| `Reranker` | `contracts.Reranker` | `application/cross_encoder_reranker.py::CrossEncoderReranker` (Phase 3 ✓) |
+| `Reranker` | `contracts.Reranker` | `application/cross_encoder_reranker.py::CrossEncoderReranker` (Phase 3 ✓) <br>`application/llm_reranker.py::LLMReranker` (Phase 5 ✓) |
 | `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) |
 
 ## Public surface
@@ -64,6 +64,25 @@ and the ingest pipeline.
 - Composition root dispatches this adapter when
   `ConfigProvider.get_reranker_config().type == "cross-encoder"`.
 
+### `LLMReranker` (Phase 5)
+
+- Borrows the configured `GenerationProvider` as a zero-shot relevance
+  judge. For each `(query, candidate)` pair the adapter renders a
+  prompt with sentinel markers, asks the LLM for a number 0-10, and
+  parses the first float-like token from the response. Ordering and
+  tie-breaking match `CrossEncoderReranker` exactly so the two
+  backends behave identically when fed equivalent scores.
+- **This is the one Reranker that composes another contract.** The
+  adapter sees only the `GenerationProvider` `Protocol`; whichever
+  provider is bound (OpenAI HTTP, Anthropic, ...) becomes the judge
+  with no further code changes. The composition root is responsible
+  for wiring the generation provider before the reranker.
+- Default `temperature=0` and `max_tokens=16` — we only need a number,
+  reproducibly. The prompt template is overridable via the constructor
+  for prompt-engineering experiments.
+- Composition root dispatches this adapter when
+  `ConfigProvider.get_reranker_config().type == "llm"`.
+
 ### `OpenAIHttpGenerationProvider` (Phase 3)
 
 - Speaks the OpenAI `/v1/chat/completions` shape — works against OpenAI
@@ -91,19 +110,17 @@ and the ingest pipeline.
   `openai_http`. Covers unary + SSE streaming + system-prompt placement +
   parameter forwarding + Bearer auth.
 - `tests/test_reranker_contracts.py` — parameterized over every registered
-  `Reranker` via `_RERANKERS`. Current entries: `cross_encoder`. Tests
-  inject a fake `Scorer` so the suite runs without loading torch.
+  `Reranker` via `_RERANKERS`. Current entries: `cross_encoder`, `llm`.
+  Tests inject a fake `Scorer` (cross-encoder) or a scorer-backed fake
+  `GenerationProvider` (llm) so the suite covers both backends without
+  loading torch or hitting a network.
 
 ## What is still missing
-
-Phase 3:
-
-- LLM-as-reranker (delegates to the `GenerationProvider` contract
-  internally; second `Reranker` for swap evidence).
 
 Phase 5 (modularity proof second adapters):
 
 - ✓ Local embedding provider (`SentenceTransformersEmbeddingProvider`).
+- ✓ LLM-as-reranker (`LLMReranker`) — composes `GenerationProvider`.
 - Anthropic-API `GenerationProvider` for the generation-side swap.
 
 Each of the three stages is **independently configurable** via `ConfigProvider`;
