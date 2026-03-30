@@ -22,6 +22,9 @@ from contracts import EmbeddingProvider
 from services.llm.application.openai_http_embedding_provider import (
     OpenAIHttpEmbeddingProvider,
 )
+from services.llm.application.sentence_transformers_embedding_provider import (
+    SentenceTransformersEmbeddingProvider,
+)
 
 Factory = Callable[[], EmbeddingProvider]
 
@@ -69,8 +72,38 @@ def _openai_http_factory(*, dimension: int = 4) -> Factory:
     return build
 
 
+def _fake_local_encoder(dimension: int = 4) -> Callable[[list[str]], list[list[float]]]:
+    """Deterministic, dependency-free fake of a sentence-transformers encoder.
+
+    Mirrors `_stub_openai_transport`: same shape, derived from codepoints, so
+    the parameterized contract assertions (distinctness, determinism, fixed
+    dimension) hold identically across both backends.
+    """
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for text in texts:
+            codes = [float(ord(c)) for c in text] or [0.0]
+            vec = (codes * ((dimension // len(codes)) + 1))[:dimension]
+            vectors.append(vec)
+        return vectors
+
+    return encode
+
+
+def _sentence_transformers_factory(*, dimension: int = 4) -> Factory:
+    def build() -> EmbeddingProvider:
+        return SentenceTransformersEmbeddingProvider(
+            encoder=_fake_local_encoder(dimension=dimension),
+            model_name="stub-local-model",
+        )
+
+    return build
+
+
 _PROVIDERS: dict[str, Factory] = {
     "openai_http": _openai_http_factory(dimension=4),
+    "sentence_transformers": _sentence_transformers_factory(dimension=4),
 }
 
 
@@ -200,3 +233,50 @@ def test_http_provider_raises_on_non_2xx() -> None:
     )
     with pytest.raises(httpx.HTTPStatusError):
         p.embed(["hi"])
+
+
+# --- SentenceTransformers-specific behavior --------------------------------
+
+
+def test_local_provider_caches_dimension_after_explicit_construction() -> None:
+    """If `dimension` is passed at construction, no probe call happens."""
+    call_count = 0
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        nonlocal call_count
+        call_count += 1
+        return [[0.0] * 4 for _ in texts]
+
+    p = SentenceTransformersEmbeddingProvider(
+        encoder=encode, model_name="m", dimension=4
+    )
+    assert p.get_dimension() == 4
+    assert p.get_dimension() == 4
+    assert call_count == 0
+
+
+def test_local_provider_probes_once_when_dimension_not_provided() -> None:
+    call_count = 0
+
+    def encode(texts: list[str]) -> list[list[float]]:
+        nonlocal call_count
+        call_count += 1
+        return [[0.0] * 7 for _ in texts]
+
+    p = SentenceTransformersEmbeddingProvider(
+        encoder=encode, model_name="m"
+    )
+    assert p.get_dimension() == 7
+    assert p.get_dimension() == 7
+    assert call_count == 1
+
+
+def test_local_provider_raises_when_encoder_returns_wrong_count() -> None:
+    def encode(texts: list[str]) -> list[list[float]]:
+        return [[0.1, 0.2]]  # always one, regardless of input
+
+    p = SentenceTransformersEmbeddingProvider(
+        encoder=encode, model_name="m", dimension=2
+    )
+    with pytest.raises(RuntimeError, match="encoder returned"):
+        p.embed(["a", "b"])

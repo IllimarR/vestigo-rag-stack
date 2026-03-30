@@ -94,6 +94,10 @@ from services.llm.application.placeholders import (
     NotImplementedGenerationProvider,
     NotImplementedReranker,
 )
+from services.llm.application.sentence_transformers_embedding_provider import (
+    SentenceTransformersEmbeddingProvider,
+    sentence_transformers_encoder,
+)
 from services.vector_store.application.chromadb_vector_store import (
     ChromaDbVectorStoreRepository,
 )
@@ -350,10 +354,21 @@ def _build_embedding_provider(embedding_config: EmbeddingConfig) -> EmbeddingPro
             model_name=embedding_config.model_name,
             api_key=api_key,
         )
+    if api_type in ("sentence-transformers", "sentence_transformers", "local"):
+        # Dimension is discovered lazily via a probe call on first
+        # `get_dimension()`; sentence-transformers exposes it directly
+        # on the loaded model but reading it requires loading the
+        # model — the probe round-trips through `encode()` once and
+        # we cache the result.
+        return SentenceTransformersEmbeddingProvider(
+            encoder=sentence_transformers_encoder(embedding_config.model_name),
+            model_name=embedding_config.model_name,
+        )
     if api_type in ("placeholder", "none", ""):
         return NotImplementedEmbeddingProvider()
     raise ValueError(
-        f"unsupported embedding api_type={api_type!r}; available: 'openai-compatible'. "
+        f"unsupported embedding api_type={api_type!r}; available: "
+        "'openai-compatible', 'sentence-transformers'. "
         "Add a new `EmbeddingProvider` implementation under services/llm/application/."
     )
 
@@ -371,7 +386,8 @@ def build_container() -> Container:
       ✓ AuditLogger          — file (JSONL) OR sqlite (env-selected)
       ✓ VectorStoreRepo      — in-memory OR chromadb (env-selected)
       ✓ Chunker              — recursive (ConfigProvider method dispatch)
-      ✓ EmbeddingProvider    — OpenAI-compatible HTTP (ConfigProvider api_type dispatch)
+      ✓ EmbeddingProvider    — OpenAI HTTP OR sentence-transformers
+                                (ConfigProvider api_type dispatch)
       ✓ SourceConnector      — filesystem (env-selected)
       ✓ DocumentConverter    — markitdown (env-selected)
       ✓ Reranker             — cross-encoder (ConfigProvider type dispatch)

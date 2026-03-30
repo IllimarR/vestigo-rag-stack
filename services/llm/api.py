@@ -22,6 +22,10 @@ from services.llm.application.placeholders import (
     NotImplementedGenerationProvider,
     NotImplementedReranker,
 )
+from services.llm.application.sentence_transformers_embedding_provider import (
+    SentenceTransformersEmbeddingProvider,
+    sentence_transformers_encoder,
+)
 
 __all__ = [
     "CrossEncoderReranker",
@@ -30,5 +34,7 @@ __all__ = [
     "NotImplementedReranker",
     "OpenAIHttpEmbeddingProvider",
     "OpenAIHttpGenerationProvider",
+    "SentenceTransformersEmbeddingProvider",
+    "sentence_transformers_encoder",
     "sentence_transformers_scorer",
 ]

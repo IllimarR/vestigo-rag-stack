@@ -4,7 +4,7 @@
 
 | Contract | Protocol | Implementation |
 |---|---|---|
-| `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) |
+| `EmbeddingProvider` | `contracts.EmbeddingProvider` | `application/openai_http_embedding_provider.py::OpenAIHttpEmbeddingProvider` (Phase 2 ✓) <br>`application/sentence_transformers_embedding_provider.py::SentenceTransformersEmbeddingProvider` (Phase 5 ✓) |
 | `Reranker` | `contracts.Reranker` | `application/cross_encoder_reranker.py::CrossEncoderReranker` (Phase 3 ✓) |
 | `GenerationProvider` | `contracts.GenerationProvider` | `application/openai_http_generation_provider.py::OpenAIHttpGenerationProvider` (Phase 3 ✓) |
 
@@ -29,6 +29,23 @@ and the ingest pipeline.
   local servers that don't require auth.
 - Composition root dispatches this adapter when
   `ConfigProvider.get_embedding_config().api_type == "openai-compatible"`.
+
+### `SentenceTransformersEmbeddingProvider` (Phase 5)
+
+- Local, in-process embeddings. No HTTP hop — model weights live on
+  disk, the GPU/CPU does the work directly. Targets the offline /
+  air-gapped deployment path and gives the Phase 5 modularity proof a
+  swap that crosses the HTTP boundary.
+- The model library is injected via an `Encoder` callable
+  (`list[str] -> list[list[float]]`). The default production builder
+  `sentence_transformers_encoder(model_name)` lazily loads
+  sentence-transformers' `SentenceTransformer` on first invocation, so
+  importing the adapter doesn't pull torch — same trick as the
+  cross-encoder reranker.
+- `get_dimension()` discovers vector width by probing the encoder once
+  unless the caller passed an explicit `dimension` at construction.
+- Composition root dispatches this adapter when
+  `ConfigProvider.get_embedding_config().api_type == "sentence-transformers"`.
 
 ### `CrossEncoderReranker` (Phase 3)
 
@@ -67,7 +84,8 @@ and the ingest pipeline.
 
 - `tests/test_embedding_provider_contracts.py` — parameterized over every
   registered `EmbeddingProvider` via `_PROVIDERS`. Current entries:
-  `openai_http`.
+  `openai_http`, `sentence_transformers`. The local provider plugs in
+  a deterministic fake encoder so the suite stays torch-free.
 - `tests/test_generation_provider_contracts.py` — parameterized over every
   registered `GenerationProvider` via `_PROVIDERS`. Current entries:
   `openai_http`. Covers unary + SSE streaming + system-prompt placement +
@@ -85,8 +103,7 @@ Phase 3:
 
 Phase 5 (modularity proof second adapters):
 
-- Local embedding provider (sentence-transformers, e.g.
-  `BAAI/bge-small-en-v1.5`) for the offline path.
+- ✓ Local embedding provider (`SentenceTransformersEmbeddingProvider`).
 - Anthropic-API `GenerationProvider` for the generation-side swap.
 
 Each of the three stages is **independently configurable** via `ConfigProvider`;
