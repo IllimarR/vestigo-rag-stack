@@ -25,6 +25,7 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 | [Pipeline & Document Lifecycle](docs/pipeline.md) | RAG query orchestration flow and document change detection |
 | [Requirements & Tech Stack](docs/requirements.md) | Hard constraints, validation criteria, tech stack, and project structure |
 | [Implementation Phases](docs/phases.md) | Phased delivery plan with exit criteria |
+| [Swap-Demo Evidence](docs/swap-demo.md) | Phase 5 per-contract swap walkthrough proving the modularity criteria |
 | [Changelog](docs/changelog.md) | Specification version history |
 
 ---
@@ -74,15 +75,21 @@ curl http://localhost:8001/health   # Admin API
 curl http://localhost:8002/health   # Ingest API
 ```
 
-All nine contracts now have real bindings, Phase 4 added a second
+All nine contracts now have real bindings. Phase 4 added a second
 implementation for the persistence-flavoured ones (SQLite-backed
 `ConfigProvider`, `AuditLogger`, and API key store), an ingest push
-flow, and the Admin API surface that drives them. The default seed
-config (`config.yaml`) points the generation provider at Ollama on
+flow, and the Admin API surface that drives them. Phase 5 added a
+second implementation for each remaining priority contract — local
+sentence-transformers embeddings, LLM-as-reranker, the Anthropic
+generation provider, and a fixed-size chunker — so every contract
+called out in the [Modularity Proof Criteria](docs/architecture.md#modularity-proof-criteria)
+now has at least two backends. The default seed config (`config.yaml`)
+points the generation provider at Ollama on
 `http://localhost:11434/v1` and the embedding provider similarly;
 bring your own OpenAI-compatible endpoint if you don't have Ollama
 running. See [Implementation Phases](docs/phases.md) for what landed
-in which phase.
+in which phase and [Swap-Demo Evidence](docs/swap-demo.md) for the
+per-contract swap walkthrough.
 
 Quick smoke test:
 

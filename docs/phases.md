@@ -16,7 +16,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | 2 | Ingestion Pipeline MVP | ✓ **Complete** — full ingest pipeline wired end-to-end |
 | 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
 | 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | ✓ **Complete** |
-| 5 | Modularity Proof and Swap Demonstrations | Not started |
+| 5 | Modularity Proof and Swap Demonstrations | ✓ **Complete** — every priority swap has a second adapter |
 | 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
 
 ### Phase 1 delivered
@@ -71,6 +71,17 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **`POST /v1/responses`** — OpenAI Responses-shaped endpoint with non-streaming JSON and SSE streaming (`response.output_text.delta` + `response.completed`). Bearer-token auth via env-driven `ApiKeyVerifier` (full key management arrives in Phase 4).
 - ✓ **Contract compliance suites** — generation provider (7 × N) and reranker (8 × N) added alongside the Phase 2 suites; orchestrator and route are covered by dedicated test modules.
 - Deferred: full API-key management (Phase 4); second `Reranker` (LLM-as-reranker) and second `GenerationProvider` (Anthropic) for Phase 5 swap evidence.
+
+### Phase 5 progress
+
+- ✓ **Second `EmbeddingProvider`** — `SentenceTransformersEmbeddingProvider` runs in-process via sentence-transformers' `SentenceTransformer` (no HTTP hop). Same injectable-encoder pattern as `CrossEncoderReranker`: the default `sentence_transformers_encoder(model_name)` lazily loads the model on first call, tests inject a deterministic fake encoder so the parameterized suite stays torch-free. Bound when `EmbeddingConfig.api_type == "sentence-transformers"`. Demonstrates the cross-boundary swap: HTTP backend ↔ in-process backend, contract surface unchanged.
+- ✓ **Second `Reranker`** — `LLMReranker` borrows the configured `GenerationProvider` as a zero-shot relevance judge. For each `(query, candidate)` pair it renders a prompt with sentinel markers, asks the LLM for a number 0-10, and parses the first float-like token from the response. Same descending-score sort and stable index tie-break as `CrossEncoderReranker`. **This is the only `Reranker` that composes another contract** — the swap nests: whichever `GenerationProvider` is bound becomes the judge with no further adapter change. Bound when `RerankerConfig.type == "llm"`.
+- ✓ **Second `GenerationProvider`** — `AnthropicGenerationProvider` speaks Anthropic's native Messages API (`/v1/messages`), not the OpenAI shape. Hand-rolled HTTPX, no `anthropic` SDK dependency. Five wire-protocol differences absorbed by the adapter: endpoint, `x-api-key` + `anthropic-version` headers, system prompt lifted to top-level body field, `max_tokens` required (default 4096), and event-typed SSE stream (`message_start` / `content_block_delta` / `message_delta` / `message_stop`). Bound when `GenerationConfig.api_type == "anthropic"`. The composition root refuses to bind without `parameters.api_key` — Anthropic does not allow anonymous requests, so the failure is loud at boot.
+- ✓ **Second `Chunker`** — `FixedSizeChunker` is the simplest possible chunker (pure sliding window, no separator hunting, no Markdown awareness). Same `Chunk.start` / `Chunk.end` / verbatim-slice invariants as `RecursiveChunker`, so downstream stages cannot tell which produced a chunk. Exists for the smallest-possible-swap demo of `ChunkConfig.method` dispatch. Bound when `ChunkConfig.method == "fixed_size"`.
+- ✓ **Contract compliance suites** — every parameterized suite gained entries for the new backends without code duplication: embedding (22 cases × 2), reranker (17 cases including the LLM-specific parse-robustness tests), generation (16 cases including the five Anthropic wire-protocol tests), chunker (12 × 2 = 24 cases). The same body of contract expectations runs against each backend; new backends only ever append a factory.
+- ✓ **Swap-demo evidence pack** — see `docs/swap-demo.md` for the per-contract YAML before/after, the matrix mapping each priority swap to its verifying tests, and the reproduction steps. Documents that "no consumer-side code change" holds structurally (enforced by `import-linter`) as well as empirically (full test suite passes for every registered combination).
+- ✓ **Live-boot verification per swap** — each new branch (`embedding.api_type=sentence-transformers`, `reranker.type=llm`, `generation.api_type=anthropic`, `chunking.method=fixed_size`) was exercised by booting all three FastAPI services and confirming each `/health` returns ok.
+- Deferred: `pgvector` `VectorStoreRepository` (ChromaDB is the production target — a second vector backend is the lowest-value Phase 5 expansion). Second `DocumentConverter` (markitdown already covers ~10 formats; parking).
 
 ---
 
