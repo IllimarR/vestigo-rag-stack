@@ -16,6 +16,14 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ---
 
+## For thesis reviewers
+
+This is a research prototype, not a packaged consumer product. Running it end-to-end requires basic command-line tooling — either [Docker](https://docs.docker.com/get-docker/) for the one-command path or Python 3.12+ with [uv](https://docs.astral.sh/uv/) for the source-tree path. Both flows are documented below and have been verified to bring the stack up on a clean machine.
+
+If anything refuses to start, the [Deployment Runbook](docs/deployment.md) includes a troubleshooting matrix and a clean-checkout reproducibility script. The minimum signal that the architectural claim holds is a `200 OK` from each `/health` endpoint — that confirms the modular service topology is live and the contract bindings resolved cleanly.
+
+---
+
 ## Documentation
 
 | Document | Description |
@@ -24,9 +32,9 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 | [Contracts](docs/contracts.md) | Internal service contract specifications for all swappable components |
 | [Pipeline & Document Lifecycle](docs/pipeline.md) | RAG query orchestration flow and document change detection |
 | [Requirements & Tech Stack](docs/requirements.md) | Hard constraints, validation criteria, tech stack, and project structure |
-| [Implementation Phases](docs/phases.md) | Phased delivery plan with exit criteria |
-| [Swap-Demo Evidence](docs/swap-demo.md) | Phase 5 per-contract swap walkthrough proving the modularity criteria |
+| [Swap-Demo Evidence](docs/swap-demo.md) | Per-contract swap walkthrough proving the modularity criteria |
 | [Deployment Runbook](docs/deployment.md) | Docker Compose flow, first-run bootstrap, swap recipes, backup |
+| [Implementation Phases](docs/phases.md) | Phased delivery plan with exit criteria |
 | [Changelog](docs/changelog.md) | Specification version history |
 
 ---
@@ -54,7 +62,29 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ## Quick Start
 
-### Development
+### Docker Compose (recommended)
+
+One command brings up the API gateway, the admin API, the ingest API, the admin web UI, and the vector store, each as a separate process on a shared Docker network:
+
+```bash
+cp .env.example .env       # set ADMIN_API_KEY / INGEST_API_KEY if you want auth
+docker compose up -d       # builds images on first run, then starts everything
+```
+
+Verify:
+
+```bash
+curl http://localhost:8000/health   # API Gateway
+curl http://localhost:8001/health   # Admin API
+curl http://localhost:8002/health   # Ingest API
+open http://localhost:3000          # Admin UI
+```
+
+The OpenAI-compatible LLM server (vLLM is the thesis-target upstream; bringing it up is out of scope for this prototype) stays on the host — the stack reaches it via `host.docker.internal`. Edit `config/config.yaml` to point `embedding.endpoint` and `generation.endpoint` at `http://host.docker.internal:8080/v1` (or whatever host:port your OpenAI-compatible server is exposing) before the first request.
+
+See [Deployment Runbook](docs/deployment.md) for first-run bootstrap, swap recipes, volume layout, and troubleshooting.
+
+### Development workflow
 
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
@@ -68,31 +98,7 @@ uv sync                # install dependencies into .venv
 uv run python main.py  # boots API Gateway :8000, Admin API :8001, Ingest API :8002
 ```
 
-Verify:
-
-```bash
-curl http://localhost:8000/health   # API Gateway
-curl http://localhost:8001/health   # Admin API
-curl http://localhost:8002/health   # Ingest API
-```
-
-All nine contracts now have real bindings. Phase 4 added a second
-implementation for the persistence-flavoured ones (SQLite-backed
-`ConfigProvider`, `AuditLogger`, and API key store), an ingest push
-flow, and the Admin API surface that drives them. Phase 5 added a
-second implementation for each remaining priority contract — local
-sentence-transformers embeddings, LLM-as-reranker, the Anthropic
-generation provider, and a fixed-size chunker — so every contract
-called out in the [Modularity Proof Criteria](docs/architecture.md#modularity-proof-criteria)
-now has at least two backends. The default seed config (`config.yaml`)
-points the generation and embedding providers at
-`http://localhost:8080/v1` — the conventional vLLM dev port; bringing
-up a real vLLM server is out of scope for this prototype, so point
-these at whichever OpenAI-compatible server you actually have running
-(vLLM, LM Studio, llamacpp-server, LocalAI, OpenAI itself, ...). See
-[Implementation Phases](docs/phases.md) for what landed in which
-phase and [Swap-Demo Evidence](docs/swap-demo.md) for the
-per-contract swap walkthrough.
+The default seed config (`config/config.yaml`) points the embedding and generation endpoints at `http://localhost:8080/v1` — the conventional vLLM dev port. Point this at whichever OpenAI-compatible server you have running (vLLM, LM Studio, llamacpp-server, LocalAI, OpenAI itself, ...).
 
 Quick smoke test:
 
@@ -103,9 +109,25 @@ curl -s http://localhost:8000/v1/responses \
   -d '{"input": "hello", "stream": false}'
 ```
 
-### Admin UI (port 3000)
+---
 
-The Vite + React control plane talks to the Admin API on `:8001`.
+## Admin UI
+
+The operator control plane runs on port 3000 (Vite + React) and talks to the Admin API at port 8001 via a typed `fetch` wrapper. Three views cover the day-to-day operator surface — API keys, configuration, and the audit log.
+
+### API keys
+
+![Admin UI — API keys view](docs/screenshots/vestigo-api-keys.png)
+
+Manage gateway bearer tokens. Read-only in env-backed mode; full create / revoke flow in sqlite-backed mode. SHA-256 hashes are stored; plaintext returns exactly once on create.
+
+### Audit log
+
+![Admin UI — Audit log view](docs/screenshots/vestigo-audit-log.png)
+
+Every query, ingest event, and admin write the backend recorded — driven by the `AuditLogger` contract. Filter by type, API key, status, or time range; click any row to expand the full event payload.
+
+### Running it
 
 ```bash
 cd admin-ui
@@ -113,35 +135,8 @@ npm install
 npm run dev      # http://localhost:3000
 ```
 
-Set the admin bearer (`ADMIN_API_KEY` from your `.env`) in the auth
-bar in the UI header to unlock the API keys, configuration, and audit
-views. See [admin-ui/README.md](admin-ui/README.md) for layout and
-scripts.
+Set the admin bearer (`ADMIN_API_KEY` from your `.env`) in the auth bar in the UI header to unlock the views. See [admin-ui/README.md](admin-ui/README.md) for layout and scripts.
 
-### Docker Compose (Phase 6)
-
-One-command self-hosted boot. Six containers, two custom images
-(`vestigo-app` for the three Python services, `vestigo-admin-ui` for
-the static SPA) plus the upstream `chromadb/chroma` image.
-
-```bash
-cp .env.example .env       # seed env (set ADMIN_API_KEY / INGEST_API_KEY if you want auth)
-docker compose up -d       # builds images on first run, then starts everything
-```
-
-When healthy, the same host ports as the dev workflow:
-`:8000` gateway · `:8001` admin API · `:8002` ingest API · `:3000`
-admin-ui · `:8500` ChromaDB.
-
-The OpenAI-compatible LLM server (vLLM is the thesis-target upstream;
-running it is out of scope here) stays on the host — the Compose stack
-reaches it via `host.docker.internal`. Edit `config/config.yaml` to
-point `embedding.endpoint` and `generation.endpoint` at
-`http://host.docker.internal:8080/v1` (or whatever host:port your
-OpenAI-compatible server is exposing) before the first run.
-
-See [Deployment Runbook](docs/deployment.md) for the operational
-walkthrough — first-run bootstrap, swapping backends in the live stack,
-volume layout, backup/restore.
+---
 
 Refer to [Requirements & Tech Stack](docs/requirements.md) for detailed setup and configuration guidance.
