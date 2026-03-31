@@ -54,7 +54,7 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ## Quick Start
 
-A working research prototype rather than a packaged product — both flows below have been verified to come up clean on a fresh checkout. `200 OK` from each `/health` endpoint after startup is the signal that every contract binding resolved and the modular service topology is live. The [Deployment Runbook](docs/deployment.md) covers first-run bootstrap, swap recipes, and troubleshooting.
+A working research prototype rather than a packaged product — running it expects some hands-on familiarity with Python tooling and with self-hosted LLM inference, since you'll need an OpenAI-compatible server (e.g. vLLM) reachable for the gateway to actually answer queries. Both flows below have been verified to come up clean on a fresh checkout, and `200 OK` from each `/health` endpoint after startup is the signal that every contract binding resolved and the modular service topology is live. The [Deployment Runbook](docs/deployment.md) covers first-run bootstrap, swap recipes, and troubleshooting.
 
 ### Docker Compose (recommended)
 
@@ -75,8 +75,6 @@ open http://localhost:3000          # Admin UI
 ```
 
 The OpenAI-compatible LLM server (vLLM is the thesis-target upstream; bringing it up is out of scope for this prototype) stays on the host — the stack reaches it via `host.docker.internal`. Edit `config/config.yaml` to point `embedding.endpoint` and `generation.endpoint` at `http://host.docker.internal:8080/v1` (or whatever host:port your OpenAI-compatible server is exposing) before the first request.
-
-See [Deployment Runbook](docs/deployment.md) for first-run bootstrap, swap recipes, volume layout, and troubleshooting.
 
 ### Development workflow
 
