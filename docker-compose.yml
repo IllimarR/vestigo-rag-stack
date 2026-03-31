@@ -8,12 +8,13 @@
 #   - vestigo-admin-ui (nginx) serves the built Vite SPA on port 3000.
 #   - chromadb is the upstream image at port 8500.
 #
-# Ollama (or any other OpenAI-compatible LLM server) is NOT in this
-# file. It runs on the host so model weights stay on the host's disk
-# and the GPU stays accessible from outside Docker. The Vestigo
-# services reach the host LLM via `host.docker.internal` — make sure
-# config.yaml's embedding/generation endpoints use that hostname when
-# running under Compose (`docs/deployment.md` documents the swap).
+# The LLM server (vLLM in the thesis target deployment, but any
+# OpenAI-compatible server works) is NOT in this file. It runs on the
+# host so model weights stay on the host's disk and the GPU stays
+# accessible from outside Docker. The Vestigo services reach the host
+# LLM via `host.docker.internal` — make sure config.yaml's
+# embedding/generation endpoints use that hostname when running under
+# Compose (`docs/deployment.md` documents the swap).
 
 services:
   # ChromaDB starts first — admin/ingest depend on it for the
@@ -64,7 +65,7 @@ services:
     extra_hosts:
       # Linux containers don't get host.docker.internal automatically;
       # this maps it to the Compose bridge gateway so OpenAI-shaped
-      # endpoints pointed at the host (e.g. Ollama on :11434) keep
+      # endpoints pointed at the host (e.g. vLLM on :8080) keep
       # working across Mac/Windows/Linux without edits to config.yaml.
       - "host.docker.internal:host-gateway"
     ports:

@@ -2,8 +2,8 @@
 
 The only registered backend today is the OpenAI-compatible HTTP adapter.
 It's tested against an `httpx.MockTransport` that simulates an OpenAI /v1/
-embeddings server, so no real endpoint (OpenAI, Ollama, LM Studio) is
-required to run the suite.
+embeddings server, so no real endpoint (vLLM, OpenAI, LM Studio, ...)
+is required to run the suite.
 
 When a second backend lands (e.g. `SentenceTransformersEmbeddingProvider`),
 register its factory in `_PROVIDERS` and the whole suite runs against it.

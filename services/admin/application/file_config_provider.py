@@ -32,7 +32,7 @@ __all__ = ["DEFAULT_CONFIG", "FileConfigProvider"]
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "embedding": {
-        "endpoint": "http://localhost:11434/v1",
+        "endpoint": "http://localhost:8080/v1",
         "api_type": "openai-compatible",
         "model_name": "nomic-embed-text",
         "parameters": {},
@@ -44,7 +44,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "parameters": {},
     },
     "generation": {
-        "endpoint": "http://localhost:11434/v1",
+        "endpoint": "http://localhost:8080/v1",
         "api_type": "openai-compatible",
         "model_name": "llama3",
         "parameters": {"temperature": 0.2, "max_tokens": 2048},

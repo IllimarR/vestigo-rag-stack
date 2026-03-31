@@ -39,11 +39,13 @@ Plus two host bind-mounts:
 | `./config` | `/app/config` | `config.yaml` for the file-backed `ConfigProvider`. Edit on host, restart container to apply. |
 | `./data/incoming` | `/app/data/incoming` | Drop folder for the `FilesystemSourceConnector` (only used when `SOURCE_CONNECTORS=filesystem`). |
 
-The LLM server (Ollama, vLLM, ...) **runs on the host**, not in
-Compose. Containers reach it via `host.docker.internal` — set up
-automatically on Mac and Windows, mapped to the bridge gateway via
-`extra_hosts` on Linux. Keeping models on the host means GPU access,
-weights, and bandwidth all stay on hardware that has them.
+The OpenAI-compatible LLM server (vLLM in the thesis-target
+deployment; running it is out of scope for this prototype) **runs on
+the host**, not in Compose. Containers reach it via
+`host.docker.internal` — set up automatically on Mac and Windows,
+mapped to the bridge gateway via `extra_hosts` on Linux. Keeping
+models on the host means GPU access, weights, and bandwidth all stay
+on hardware that has them.
 
 ---
 
@@ -60,10 +62,12 @@ echo "INGEST_API_KEY=$(openssl rand -hex 16)" >> .env
 
 # 2. Point the LLM endpoints at the host
 # Edit config/config.yaml:
-#   embedding.endpoint:  http://host.docker.internal:11434/v1
-#   generation.endpoint: http://host.docker.internal:11434/v1
-# (Replace 11434 / model_name with whatever your Ollama / vLLM / ...
-# server actually exposes.)
+#   embedding.endpoint:  http://host.docker.internal:8080/v1
+#   generation.endpoint: http://host.docker.internal:8080/v1
+# (Replace 8080 / model_name with whatever your OpenAI-compatible
+# server actually exposes. The default 8080 matches the conventional
+# vLLM dev port, but the adapter doesn't care which server is on the
+# other end.)
 
 # 3. Build + start
 docker compose up -d

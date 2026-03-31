@@ -5,9 +5,16 @@
 # defaults if the file is missing, so copying this file is optional.
 #
 # Infrastructure-level settings (ports, backend bindings) live in .env.
+#
+# The embedding and generation endpoints below point at the conventional
+# vLLM dev port (8080). Bringing up a real vLLM server is out of scope
+# for this prototype — the adapter just needs an OpenAI-compatible
+# endpoint at the configured URL. Point these at whichever
+# OpenAI-compatible server you actually have running (vLLM, LM Studio,
+# llamacpp-server, LocalAI, OpenAI itself, ...).
 
 embedding:
-  endpoint: "http://localhost:11434/v1"
+  endpoint: "http://localhost:8080/v1"
   api_type: "openai-compatible"
   model_name: "nomic-embed-text"
   parameters: {}
@@ -19,7 +26,7 @@ reranker:
   parameters: {}
 
 generation:
-  endpoint: "http://localhost:11434/v1"
+  endpoint: "http://localhost:8080/v1"
   api_type: "openai-compatible"
   model_name: "llama3"
   parameters:

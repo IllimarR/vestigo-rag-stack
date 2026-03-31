@@ -18,9 +18,9 @@ and the ingest pipeline.
 
 ### `OpenAIHttpEmbeddingProvider` (Phase 2)
 
-- Speaks the OpenAI `/v1/embeddings` shape — works against OpenAI itself,
-  Ollama, LM Studio, LocalAI, llamacpp-server, vLLM, or any other
-  OpenAI-compatible endpoint.
+- Speaks the OpenAI `/v1/embeddings` shape — works against vLLM (the
+  thesis-target upstream), OpenAI itself, LM Studio, llamacpp-server,
+  LocalAI, or any other OpenAI-compatible endpoint.
 - Constructor accepts an `httpx.Client` so tests can inject a `MockTransport`
   and production code can pool connections.
 - `get_dimension()` lazily probes the model on first call (embeds a
@@ -85,9 +85,9 @@ and the ingest pipeline.
 
 ### `OpenAIHttpGenerationProvider` (Phase 3)
 
-- Speaks the OpenAI `/v1/chat/completions` shape — works against OpenAI
-  itself, Ollama, LM Studio, LocalAI, llamacpp-server, vLLM, and similar
-  OpenAI-compatible endpoints.
+- Speaks the OpenAI `/v1/chat/completions` shape — works against vLLM
+  (the thesis-target upstream), OpenAI itself, LM Studio,
+  llamacpp-server, LocalAI, and similar OpenAI-compatible endpoints.
 - `generate(request)` returns a full `GenerationResponse`;
   `generate_stream(request)` yields one `GenerationChunk` per
   upstream-emitted `content` delta and a final usage-bearing chunk when

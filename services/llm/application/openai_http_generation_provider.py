@@ -1,17 +1,17 @@
 """OpenAI-compatible HTTP generation provider — Phase 3 first `GenerationProvider`.
 
-Targets any server that speaks the OpenAI `/v1/chat/completions` shape:
-OpenAI itself, Ollama, LM Studio, LocalAI, llamacpp-server, vLLM, and
-similar. The adapter doesn't care which — it just POSTs
-`{"model": ..., "messages": [...], ...}` and reads back the choice
-content. Streaming follows OpenAI's SSE convention (`data: {...}` lines
-terminated by `data: [DONE]`).
+Targets any server that speaks the OpenAI `/v1/chat/completions`
+shape: vLLM (the thesis-target upstream), OpenAI itself, LM Studio,
+llamacpp-server, LocalAI, and similar. The adapter doesn't care which
+— it just POSTs `{"model": ..., "messages": [...], ...}` and reads
+back the choice content. Streaming follows OpenAI's SSE convention
+(`data: {...}` lines terminated by `data: [DONE]`).
 
 The adapter is fully self-contained:
   - Constructor takes an optional `httpx.Client` so tests can inject a
     `MockTransport` for both unary and streaming responses.
-  - API key is optional (Ollama and LM Studio don't require one) —
-    pass `api_key` to enable Bearer auth.
+  - API key is optional (many self-hosted servers don't require one)
+    — pass `api_key` to enable Bearer auth.
   - Streaming yields one `GenerationChunk` per non-empty `content`
     delta plus a final chunk whenever the upstream reports `usage`.
 

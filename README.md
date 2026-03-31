@@ -85,11 +85,13 @@ sentence-transformers embeddings, LLM-as-reranker, the Anthropic
 generation provider, and a fixed-size chunker — so every contract
 called out in the [Modularity Proof Criteria](docs/architecture.md#modularity-proof-criteria)
 now has at least two backends. The default seed config (`config.yaml`)
-points the generation provider at Ollama on
-`http://localhost:11434/v1` and the embedding provider similarly;
-bring your own OpenAI-compatible endpoint if you don't have Ollama
-running. See [Implementation Phases](docs/phases.md) for what landed
-in which phase and [Swap-Demo Evidence](docs/swap-demo.md) for the
+points the generation and embedding providers at
+`http://localhost:8080/v1` — the conventional vLLM dev port; bringing
+up a real vLLM server is out of scope for this prototype, so point
+these at whichever OpenAI-compatible server you actually have running
+(vLLM, LM Studio, llamacpp-server, LocalAI, OpenAI itself, ...). See
+[Implementation Phases](docs/phases.md) for what landed in which
+phase and [Swap-Demo Evidence](docs/swap-demo.md) for the
 per-contract swap walkthrough.
 
 Quick smoke test:
@@ -131,11 +133,12 @@ When healthy, the same host ports as the dev workflow:
 `:8000` gateway · `:8001` admin API · `:8002` ingest API · `:3000`
 admin-ui · `:8500` ChromaDB.
 
-Ollama (or any other OpenAI-compatible LLM server) stays on the host —
-the Compose stack reaches it via `host.docker.internal`. Edit
-`config/config.yaml` to point `embedding.endpoint` and
-`generation.endpoint` at `http://host.docker.internal:11434/v1` before
-the first run.
+The OpenAI-compatible LLM server (vLLM is the thesis-target upstream;
+running it is out of scope here) stays on the host — the Compose stack
+reaches it via `host.docker.internal`. Edit `config/config.yaml` to
+point `embedding.endpoint` and `generation.endpoint` at
+`http://host.docker.internal:8080/v1` (or whatever host:port your
+OpenAI-compatible server is exposing) before the first run.
 
 See [Deployment Runbook](docs/deployment.md) for the operational
 walkthrough — first-run bootstrap, swapping backends in the live stack,

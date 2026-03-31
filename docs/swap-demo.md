@@ -79,7 +79,7 @@ embedding:
   parameters: {}
 ```
 
-**Switch to OpenAI HTTP (Ollama, vLLM, LM Studio, OpenAI itself, ...):**
+**Switch to OpenAI HTTP (vLLM, LM Studio, llamacpp-server, OpenAI itself, ...):**
 
 ```yaml
 embedding:
@@ -150,7 +150,7 @@ generation:
     api_key: sk-ant-...
 ```
 
-**Switch back to OpenAI-compatible (Ollama, vLLM, OpenAI, ...):**
+**Switch back to OpenAI-compatible (vLLM, LM Studio, OpenAI itself, ...):**
 
 ```yaml
 generation:

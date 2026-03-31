@@ -9,7 +9,7 @@ the same ordering logic as the cross-encoder path.
 Why this matters architecturally
 --------------------------------
 This is the only `Reranker` that *composes another contract*. The
-adapter knows nothing about HTTP, Ollama, Anthropic, or any vendor —
+adapter knows nothing about HTTP, vLLM, Anthropic, or any vendor —
 it only knows the `GenerationProvider` `Protocol`. So the swap story
 nests: the gateway is wired to `LLMReranker`; whichever
 `GenerationProvider` is bound (OpenAI HTTP, Anthropic, ...) becomes

@@ -1,9 +1,10 @@
 """OpenAI-compatible HTTP embedding provider — Phase 2 first `EmbeddingProvider`.
 
-Targets any server that speaks the OpenAI `/v1/embeddings` shape: OpenAI
-itself, Ollama, LM Studio, LocalAI, llamacpp-server, vLLM, etc. The
-adapter doesn't care which — it just POSTs `{"model": ..., "input": [...]}`
-and reads back the `data[i].embedding` arrays.
+Targets any server that speaks the OpenAI `/v1/embeddings` shape:
+vLLM (the thesis-target upstream), OpenAI itself, LM Studio,
+llamacpp-server, LocalAI, and similar. The adapter doesn't care which
+— it just POSTs `{"model": ..., "input": [...]}` and reads back the
+`data[i].embedding` arrays.
 
 The adapter is fully self-contained:
   - Constructor takes an optional `httpx.Client` so tests can inject a
@@ -11,8 +12,8 @@ The adapter is fully self-contained:
   - `get_dimension()` lazily probes the model on first call by embedding
     a sentinel string, then caches the result.
 
-An API key is optional (Ollama and LM Studio don't require one) — pass
-`api_key` to enable Bearer auth.
+An API key is optional (many self-hosted servers don't require one) —
+pass `api_key` to enable Bearer auth.
 """
 
 from __future__ import annotations
