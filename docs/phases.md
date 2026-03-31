@@ -17,7 +17,7 @@ The solution is implemented in phases that first establish contract boundaries a
 | 3 | Retrieval, Generation, and API Gateway | ✓ **Complete** — query pipeline live behind `POST /v1/responses` |
 | 4 | Admin API, ConfigProvider Persistence, and Operational Control Plane | ✓ **Complete** |
 | 5 | Modularity Proof and Swap Demonstrations | ✓ **Complete** — every priority swap has a second adapter |
-| 6 | Hardening, Validation, and Thesis Evidence Pack | Not started |
+| 6 | Hardening, Validation, and Thesis Evidence Pack | **In progress** — Compose stack + runbook landed |
 
 ### Phase 1 delivered
 
@@ -82,6 +82,16 @@ The solution is implemented in phases that first establish contract boundaries a
 - ✓ **Swap-demo evidence pack** — see `docs/swap-demo.md` for the per-contract YAML before/after, the matrix mapping each priority swap to its verifying tests, and the reproduction steps. Documents that "no consumer-side code change" holds structurally (enforced by `import-linter`) as well as empirically (full test suite passes for every registered combination).
 - ✓ **Live-boot verification per swap** — each new branch (`embedding.api_type=sentence-transformers`, `reranker.type=llm`, `generation.api_type=anthropic`, `chunking.method=fixed_size`) was exercised by booting all three FastAPI services and confirming each `/health` returns ok.
 - Deferred: `pgvector` `VectorStoreRepository` (ChromaDB is the production target — a second vector backend is the lowest-value Phase 5 expansion). Second `DocumentConverter` (markitdown already covers ~10 formats; parking).
+
+### Phase 6 progress
+
+- ✓ **Docker Compose stack** — `docker-compose.yml` orchestrates six containers (gateway, admin, ingest, admin-ui, chromadb) on a shared bridge network. Two persistent named volumes (`chromadb-data`, `control-plane-data`) plus host bind-mounts for `config/` and `data/incoming/`. Healthcheck-gated startup ordering — admin/ingest/gateway wait on chromadb, admin-ui waits on admin — so a clean `up -d` always converges to a working stack. Closes the Phase 1 deferral.
+- ✓ **Shared Python image** — single multi-stage `Dockerfile` produces `vestigo-app:latest`; three containers share the image and differ only by the `--service {gateway,admin,ingest}` flag. Reinforces the architectural argument that the three services share one code path until the very last entrypoint decision in `main.py`. `main.py` gained a `--service` flag with backwards-compatible default `all` so the developer workflow (`uv run python main.py`) is unchanged.
+- ✓ **admin-ui static image** — multi-stage build (`node:20-alpine` → `nginx:alpine`) serving the Vite build on port 3000 with SPA fallback routing. No reverse-proxy — the browser hits the Admin API directly via the host port mapping.
+- ✓ **Host-LLM reachability** — every Python container declares `extra_hosts: host.docker.internal:host-gateway`, so OpenAI-shaped endpoints pointed at the host's Ollama/vLLM keep working on Linux without Compose edits. Ollama deliberately stays out of the Compose stack — model weights and GPU access belong on the host.
+- ✓ **Deployment runbook** — `docs/deployment.md` documents first-run bootstrap, per-strand swap recipes (config-yaml swaps, env swaps, code-level swaps), volume layout, backup/restore commands, troubleshooting, and the clean-checkout reproducibility script that closes the "system runs self-hosted end-to-end with reproducible setup" exit criterion.
+- ✓ **End-to-end verification** — `docker compose up -d` from a clean repo (after `cp .env.example .env`) brings up all six containers healthy; every `/health` returns ok and ChromaDB's heartbeat returns a timestamp. Recorded in `docs/deployment.md` as the reproduction script.
+- Remaining: architecture/dependency Mermaid diagrams in `docs/architecture.md`, targeted HTTP-retry hardening for the wire-bound providers, validation run against a small corpus with evidence capture.
 
 ---
 

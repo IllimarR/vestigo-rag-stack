@@ -26,6 +26,7 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 | [Requirements & Tech Stack](docs/requirements.md) | Hard constraints, validation criteria, tech stack, and project structure |
 | [Implementation Phases](docs/phases.md) | Phased delivery plan with exit criteria |
 | [Swap-Demo Evidence](docs/swap-demo.md) | Phase 5 per-contract swap walkthrough proving the modularity criteria |
+| [Deployment Runbook](docs/deployment.md) | Docker Compose flow, first-run bootstrap, swap recipes, backup |
 | [Changelog](docs/changelog.md) | Specification version history |
 
 ---
@@ -115,10 +116,29 @@ bar in the UI header to unlock the API keys, configuration, and audit
 views. See [admin-ui/README.md](admin-ui/README.md) for layout and
 scripts.
 
-### Docker Compose (planned)
+### Docker Compose (Phase 6)
 
-A `docker-compose.yml` stack will be provided in a later phase (see
-[Phases](docs/phases.md) and [Requirements](docs/requirements.md)). Until
-then, run the services directly via `uv run python main.py` as above.
+One-command self-hosted boot. Six containers, two custom images
+(`vestigo-app` for the three Python services, `vestigo-admin-ui` for
+the static SPA) plus the upstream `chromadb/chroma` image.
+
+```bash
+cp .env.example .env       # seed env (set ADMIN_API_KEY / INGEST_API_KEY if you want auth)
+docker compose up -d       # builds images on first run, then starts everything
+```
+
+When healthy, the same host ports as the dev workflow:
+`:8000` gateway · `:8001` admin API · `:8002` ingest API · `:3000`
+admin-ui · `:8500` ChromaDB.
+
+Ollama (or any other OpenAI-compatible LLM server) stays on the host —
+the Compose stack reaches it via `host.docker.internal`. Edit
+`config/config.yaml` to point `embedding.endpoint` and
+`generation.endpoint` at `http://host.docker.internal:11434/v1` before
+the first run.
+
+See [Deployment Runbook](docs/deployment.md) for the operational
+walkthrough — first-run bootstrap, swapping backends in the live stack,
+volume layout, backup/restore.
 
 Refer to [Requirements & Tech Stack](docs/requirements.md) for detailed setup and configuration guidance.
