@@ -40,6 +40,22 @@ export function setToken(value: string): void {
   if (typeof window === "undefined") return;
   if (value) window.localStorage.setItem(TOKEN_KEY, value);
   else window.localStorage.removeItem(TOKEN_KEY);
+  // Notify the rest of the app — the topbar status pill re-renders
+  // off this, without having to thread state through every component.
+  window.dispatchEvent(new Event("vestigo:auth-changed"));
+}
+
+// --- Health (used by the topbar status pill) ------------------------------
+
+export async function adminHealth(): Promise<{ status: string }> {
+  // `/health` is unauthenticated by design — it should be reachable even
+  // before the operator types a key. We bypass the bearer-injecting
+  // `request()` helper so a missing token does not surface as an error.
+  const response = await fetch(`${BASE_URL}/health`);
+  if (!response.ok) {
+    throw new ApiError(response.status, `HTTP ${response.status}`);
+  }
+  return (await response.json()) as { status: string };
 }
 
 async function request<T>(
