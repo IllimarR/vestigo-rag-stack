@@ -1,0 +1,173 @@
+# vestigo-rag-stack — single-host deployment topology.
+#
+# Six containers, two custom images:
+#   - vestigo-app (Python) runs in three roles: gateway, admin, ingest.
+#     The same image, different `--service` flag per container. This
+#     reinforces the thesis argument that the services share one code
+#     path until the very last entrypoint decision in main.py.
+#   - vestigo-admin-ui (nginx) serves the built Vite SPA on port 3000.
+#   - chromadb is the upstream image at port 8500.
+#
+# Ollama (or any other OpenAI-compatible LLM server) is NOT in this
+# file. It runs on the host so model weights stay on the host's disk
+# and the GPU stays accessible from outside Docker. The Vestigo
+# services reach the host LLM via `host.docker.internal` — make sure
+# config.yaml's embedding/generation endpoints use that hostname when
+# running under Compose (`docs/deployment.md` documents the swap).
+
+services:
+  # ChromaDB starts first — admin/ingest depend on it for the
+  # vector_store binding. Healthcheck gates dependent services so we
+  # don't race a half-booted chromadb on cold start.
+  chromadb:
+    image: chromadb/chroma:0.5.20
+    container_name: vestigo-chromadb
+    restart: unless-stopped
+    environment:
+      # ChromaDB defaults to 8000 internally; we publish 8500 to the
+      # host to match the env contract in `.env.example` and to avoid
+      # colliding with the gateway when someone runs the stack in host
+      # network mode.
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadb-data:/chroma/chroma
+    ports:
+      - "8500:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - vestigo
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vestigo-app:latest
+    container_name: vestigo-gateway
+    restart: unless-stopped
+    command: ["--service", "gateway"]
+    env_file:
+      - .env
+    environment:
+      # Override the env defaults from `.env.example` so the
+      # containerised stack always reaches the chromadb service via
+      # the bridge network regardless of what the operator set
+      # locally for dev.
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: "8000"
+      VECTOR_STORE_BACKEND: chromadb
+    extra_hosts:
+      # Linux containers don't get host.docker.internal automatically;
+      # this maps it to the Compose bridge gateway so OpenAI-shaped
+      # endpoints pointed at the host (e.g. Ollama on :11434) keep
+      # working across Mac/Windows/Linux without edits to config.yaml.
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config
+      - control-plane-data:/app/data
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - vestigo
+
+  admin:
+    image: vestigo-app:latest
+    container_name: vestigo-admin
+    restart: unless-stopped
+    command: ["--service", "admin"]
+    env_file:
+      - .env
+    environment:
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: "8000"
+      VECTOR_STORE_BACKEND: chromadb
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./config:/app/config
+      - control-plane-data:/app/data
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - vestigo
+
+  ingest:
+    image: vestigo-app:latest
+    container_name: vestigo-ingest
+    restart: unless-stopped
+    command: ["--service", "ingest"]
+    env_file:
+      - .env
+    environment:
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: "8000"
+      VECTOR_STORE_BACKEND: chromadb
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./config:/app/config
+      - control-plane-data:/app/data
+      # Bind-mount the host's filesystem-ingestion drop folder so
+      # operators can drop documents on the host and have the
+      # FilesystemSourceConnector pick them up. Only meaningful when
+      # SOURCE_CONNECTORS=filesystem; ApiPushSourceConnector ignores it.
+      - ./data/incoming:/app/data/incoming
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - vestigo
+
+  admin-ui:
+    build:
+      context: ./admin-ui
+      dockerfile: Dockerfile
+    image: vestigo-admin-ui:latest
+    container_name: vestigo-admin-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      admin:
+        condition: service_healthy
+    networks:
+      - vestigo
+
+volumes:
+  chromadb-data:
+  control-plane-data:
+
+networks:
+  vestigo:
+    driver: bridge

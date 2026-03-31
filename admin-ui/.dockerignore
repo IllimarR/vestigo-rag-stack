@@ -1,0 +1,18 @@
+# Don't ship node_modules or dev scratch into the build context.
+# `npm ci` inside the builder stage rebuilds node_modules from the
+# lockfile, and tests/coverage are not needed at runtime.
+
+node_modules/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Editor / OS junk
+.vscode/
+.idea/
+.DS_Store
+
+# Tests + dev configs the production bundle doesn't need
+**/__tests__/
+vitest.config.*

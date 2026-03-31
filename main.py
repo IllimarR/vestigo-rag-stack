@@ -23,6 +23,7 @@ to change. That is the modularity guarantee in `docs/architecture.md` §2.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 from dataclasses import dataclass
@@ -498,7 +499,17 @@ async def _serve(
     await server.serve()
 
 
-async def serve_all() -> None:
+SERVICE_CHOICES = ("all", "gateway", "admin", "ingest")
+
+
+async def serve_all(service: str = "all") -> None:
+    """Boot one or all of the three FastAPI services.
+
+    `service` is `all` for the single-process developer workflow
+    (`uv run python main.py`) and a specific name when each service
+    runs in its own container under Docker Compose. The Container is
+    built either way so every service sees a consistent set of bindings.
+    """
     load_dotenv()
 
     container = build_container()
@@ -507,40 +518,65 @@ async def serve_all() -> None:
     api_key_store = _build_api_key_store()
     api_key_verifier = _build_api_key_verifier(api_key_store)
 
-    gateway_app = create_gateway_app(rag_orchestrator, api_key_verifier=api_key_verifier)
-    ingest_app = create_ingest_app(
-        ingest_orchestrator,
-        source_connector=container.source_connector,
-        config_provider=container.config_provider,
-    )
-    admin_app = create_admin_app(
-        config_provider=container.config_provider,
-        audit_logger=container.audit_logger,
-        api_key_store=api_key_store,
-    )
+    apps: dict[str, tuple[object, int, str]] = {
+        "gateway": (
+            create_gateway_app(rag_orchestrator, api_key_verifier=api_key_verifier),
+            _port("API_GATEWAY_PORT", 8000),
+            "API Gateway",
+        ),
+        "ingest": (
+            create_ingest_app(
+                ingest_orchestrator,
+                source_connector=container.source_connector,
+                config_provider=container.config_provider,
+            ),
+            _port("INGEST_API_PORT", 8002),
+            "Ingest API",
+        ),
+        "admin": (
+            create_admin_app(
+                config_provider=container.config_provider,
+                audit_logger=container.audit_logger,
+                api_key_store=api_key_store,
+            ),
+            _port("ADMIN_API_PORT", 8001),
+            "Admin API",
+        ),
+    }
 
-    await asyncio.gather(
-        _serve(
-            gateway_app,
-            port=_port("API_GATEWAY_PORT", 8000),
-            name="API Gateway",
-        ),
-        _serve(
-            ingest_app,
-            port=_port("INGEST_API_PORT", 8002),
-            name="Ingest API",
-        ),
-        _serve(
-            admin_app,
-            port=_port("ADMIN_API_PORT", 8001),
-            name="Admin API",
-        ),
-    )
+    if service == "all":
+        await asyncio.gather(
+            *(_serve(app, port=port, name=name) for app, port, name in apps.values())
+        )
+        return
+
+    if service not in apps:
+        raise ValueError(
+            f"unknown --service {service!r}; expected one of {SERVICE_CHOICES}."
+        )
+    app, port, name = apps[service]
+    await _serve(app, port=port, name=name)
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="vestigo-rag-stack composition root.",
+    )
+    parser.add_argument(
+        "--service",
+        choices=SERVICE_CHOICES,
+        default="all",
+        help=(
+            "Which FastAPI service to run. `all` (default) boots gateway, "
+            "admin, and ingest in one process — the developer workflow. "
+            "The Docker Compose containers each pass a specific service "
+            "name so each container hosts exactly one service."
+        ),
+    )
+    args = parser.parse_args()
+
     try:
-        asyncio.run(serve_all())
+        asyncio.run(serve_all(service=args.service))
     except KeyboardInterrupt:
         print("[vestigo] shutting down")
 

@@ -1,0 +1,46 @@
+# Keep the Docker build context small and free of host artefacts.
+# Mirrors .gitignore plus build-only exclusions.
+
+# Local environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE / editor
+.vscode/
+.idea/
+.DS_Store
+
+# Test + coverage scratch
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+htmlcov/
+
+# Data the host owns — Compose mounts persistent volumes for these,
+# never copies them into the image.
+data/
+config/
+
+# admin-ui has its own Dockerfile and build context; no need to ship
+# its node_modules into the Python image.
+admin-ui/
+node_modules/
+
+# Local-only docs and notes
+CLAUDE.md
+.planning/
+.env
+.env.*
+!.env.example
+
+# Git metadata
+.git/
+.gitignore
+
+# Build outputs
+dist/
+build/
