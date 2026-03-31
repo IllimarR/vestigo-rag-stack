@@ -16,14 +16,6 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ---
 
-## For thesis reviewers
-
-This is a research prototype, not a packaged consumer product. Running it end-to-end requires basic command-line tooling — either [Docker](https://docs.docker.com/get-docker/) for the one-command path or Python 3.12+ with [uv](https://docs.astral.sh/uv/) for the source-tree path. Both flows are documented below and have been verified to bring the stack up on a clean machine.
-
-If anything refuses to start, the [Deployment Runbook](docs/deployment.md) includes a troubleshooting matrix and a clean-checkout reproducibility script. The minimum signal that the architectural claim holds is a `200 OK` from each `/health` endpoint — that confirms the modular service topology is live and the contract bindings resolved cleanly.
-
----
-
 ## Documentation
 
 | Document | Description |
@@ -61,6 +53,8 @@ If anything refuses to start, the [Deployment Runbook](docs/deployment.md) inclu
 ---
 
 ## Quick Start
+
+A working research prototype rather than a packaged product — both flows below have been verified to come up clean on a fresh checkout. `200 OK` from each `/health` endpoint after startup is the signal that every contract binding resolved and the modular service topology is live. The [Deployment Runbook](docs/deployment.md) covers first-run bootstrap, swap recipes, and troubleshooting.
 
 ### Docker Compose (recommended)
 
