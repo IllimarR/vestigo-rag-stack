@@ -156,6 +156,16 @@ def _bool(env_var: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _csv_env(env_var: str) -> list[str] | None:
+    """Parse a comma-separated env var. Empty / unset returns `None` so
+    consumers can fall back to their own defaults.
+    """
+    raw = os.getenv(env_var, "").strip()
+    if not raw:
+        return None
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 def _build_source_connector() -> SourceConnector:
     """Dispatch on `SOURCE_CONNECTORS` env (infrastructure-level binding).
 
@@ -538,6 +548,7 @@ async def serve_all(service: str = "all") -> None:
                 config_provider=container.config_provider,
                 audit_logger=container.audit_logger,
                 api_key_store=api_key_store,
+                cors_origins=_csv_env("ADMIN_CORS_ORIGINS"),
             ),
             _port("ADMIN_API_PORT", 8001),
             "Admin API",
