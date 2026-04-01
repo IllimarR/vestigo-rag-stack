@@ -221,7 +221,14 @@ def test_http_provider_sends_no_bearer_when_api_key_missing() -> None:
     assert captured["auth"] is None
 
 
-def test_http_provider_raises_on_non_2xx() -> None:
+def test_http_provider_raises_on_non_2xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 500 is in `RETRY_STATUSES` so the helper retries the configured
+    # number of times before bubbling the final response — suppress sleeps
+    # so the test doesn't add real seconds of latency.
+    monkeypatch.setattr(
+        "services.llm.application._retry.time.sleep", lambda _: None
+    )
+
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": "server exploded"})
 

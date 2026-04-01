@@ -38,6 +38,8 @@ from contracts import (
     TokenUsage,
 )
 
+from services.llm.application._retry import execute_with_retry
+
 __all__ = ["AnthropicGenerationProvider"]
 
 DEFAULT_TIMEOUT = 60.0
@@ -68,10 +70,12 @@ class AnthropicGenerationProvider:
 
     def generate(self, request: GenerationRequest) -> GenerationResponse:
         body = self._build_body(request, stream=False)
-        response = self._client.post(
-            f"{self._endpoint}/messages",
-            json=body,
-            headers=self._headers(),
+        response = execute_with_retry(
+            lambda: self._client.post(
+                f"{self._endpoint}/messages",
+                json=body,
+                headers=self._headers(),
+            )
         )
         response.raise_for_status()
         payload = response.json()
@@ -82,6 +86,10 @@ class AnthropicGenerationProvider:
         return GenerationResponse(text=text, usage=usage, model_id=model_id)
 
     def generate_stream(self, request: GenerationRequest) -> Iterator[GenerationChunk]:
+        # Streaming intentionally does not use `execute_with_retry`: once
+        # Anthropic has started emitting `content_block_delta` events the
+        # stream cannot be resumed, and replaying the request would risk
+        # double-billing the user. SSE callers handle stream errors above.
         body = self._build_body(request, stream=True)
         input_tokens = 0
         output_tokens = 0

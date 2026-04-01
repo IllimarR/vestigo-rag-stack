@@ -34,6 +34,8 @@ from contracts import (
     TokenUsage,
 )
 
+from services.llm.application._retry import execute_with_retry
+
 __all__ = ["OpenAIHttpGenerationProvider"]
 
 DEFAULT_TIMEOUT = 60.0
@@ -59,10 +61,12 @@ class OpenAIHttpGenerationProvider:
 
     def generate(self, request: GenerationRequest) -> GenerationResponse:
         body = self._build_body(request, stream=False)
-        response = self._client.post(
-            f"{self._endpoint}/chat/completions",
-            json=body,
-            headers=self._headers(),
+        response = execute_with_retry(
+            lambda: self._client.post(
+                f"{self._endpoint}/chat/completions",
+                json=body,
+                headers=self._headers(),
+            )
         )
         response.raise_for_status()
         payload = response.json()
@@ -75,6 +79,11 @@ class OpenAIHttpGenerationProvider:
         return GenerationResponse(text=text, usage=usage, model_id=model_id)
 
     def generate_stream(self, request: GenerationRequest) -> Iterator[GenerationChunk]:
+        # Streaming intentionally does not use `execute_with_retry`: once the
+        # upstream has started emitting tokens, the stream cannot be resumed,
+        # and replaying the request would risk double-billing the user.
+        # OpenAI-compatible SSE clients are expected to handle stream errors
+        # at the client level.
         body = self._build_body(request, stream=True)
         with self._client.stream(
             "POST",

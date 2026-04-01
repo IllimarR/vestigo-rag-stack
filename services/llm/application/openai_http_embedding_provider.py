@@ -22,6 +22,8 @@ import threading
 
 import httpx
 
+from services.llm.application._retry import execute_with_retry
+
 __all__ = ["OpenAIHttpEmbeddingProvider"]
 
 DEFAULT_TIMEOUT = 30.0
@@ -54,10 +56,12 @@ class OpenAIHttpEmbeddingProvider:
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
 
-        response = self._client.post(
-            f"{self._endpoint}/embeddings",
-            json={"model": self._model_name, "input": texts},
-            headers=headers,
+        response = execute_with_retry(
+            lambda: self._client.post(
+                f"{self._endpoint}/embeddings",
+                json={"model": self._model_name, "input": texts},
+                headers=headers,
+            )
         )
         response.raise_for_status()
         payload = response.json()

@@ -95,6 +95,84 @@ Configuration, management, and monitoring.
 
 ---
 
+## Architecture Diagrams
+
+Two views of the same system. The first shows runtime topology — who talks to whom at HTTP boundaries and which contracts mediate the rest. The second shows dependency direction — what the modularity guarantee actually constrains in the source tree.
+
+### Diagram A — Runtime topology
+
+```
+  ┌─────────────┐    ┌────────────────┐    ┌──────────────┐
+  │  OpenWebUI  │    │ Ingest clients │    │ Administrator│
+  │  / clients  │    │  (push docs)   │    │  (browser)   │
+  └──────┬──────┘    └────────┬───────┘    └──────┬───────┘
+         │ HTTP               │ HTTP              │ HTTP
+  ───────┼────────────────────┼───────────────────┼──────── system
+         ▼                    ▼                   ▼        boundary
+  ┌─────────────┐    ┌────────────────┐    ┌──────────────┐
+  │ API Gateway │    │   Ingest API   │    │  Admin API   │
+  │   :8000     │    │     :8002      │    │    :8001     │
+  └──────┬──────┘    └────────┬───────┘    └──────┬───────┘
+         │                    │                   │
+         ▼                    ▼                   ▼
+  ┌─────────────┐    ┌────────────────┐    ┌──────────────┐
+  │     RAG     │    │     Ingest     │    │    Admin     │
+  │  Pipeline   │    │    Pipeline    │    │   Service    │
+  │ Orchestr.   │    │  Orchestrator  │    │              │
+  └──┬───────┬──┘    └───┬────────┬───┘    └──────┬───────┘
+     │       │           │        │               │
+     │       └─────┬─────┘        │               │
+     │             │              │               │
+     ▼             ▼              ▼               ▼
+  ┌─────────────────────────────────────────────────────┐
+  │       9 Protocol contracts (depended on, never      │
+  │       imported between services or adapters)        │
+  └──────┬──────────────┬───────────────┬───────────────┘
+         │              │               │
+         ▼              ▼               ▼
+     ChromaDB     external LLM    SQLite control
+     (vectors)   (OpenAI-compat   plane (config,
+                  or Anthropic)    audit, keys)
+```
+
+Above the dashed line is outside the system boundary — the three HTTP REST surfaces are the only ways in. Below the line, components communicate exclusively through the nine Protocol contracts, and each leaves the process again only at a swappable adapter.
+
+### Diagram B — Dependency direction
+
+```
+                  ┌───────────────────────────┐
+                  │     contracts package     │
+                  │   (9 Protocols + DTOs)    │
+                  │                           │
+                  │   no project imports      │
+                  └─────────────▲─────────────┘
+                                │
+                                │  depended on by
+                                │  (arrows only point this way)
+                                │
+       ┌────────────────────────┼────────────────────────┐
+       │                        │                        │
+   services/*             adapters in              composition
+  (api_gateway,           services/<x>/                root
+   ingest, retrieval,      application/             (main.py)
+   admin, audit,
+   vector_store, llm)
+       │                        │                        │
+       └────────────────────────┴────────────┬───────────┘
+                                             │
+                                             │ wires at startup
+                                             ▼
+                              concrete adapter bindings
+                              (ChromaDB ↔ in-mem,
+                               OpenAI ↔ Anthropic,
+                               sentence-transformers ↔
+                                HTTP embed, etc.)
+```
+
+The shape of this graph is the modularity guarantee. `import-linter` (`uv run lint-imports`) enforces it as a build gate: the `contracts` package must depend on nothing project-owned, service modules never import each other, and only the relevant service touches each backend driver. Removing or replacing any single adapter therefore cannot break any other module — there is no incoming edge for it to break.
+
+---
+
 ## Communication Architecture
 
 The system uses a **hybrid communication model**: internal interfaces for the core pipeline, HTTP APIs for external boundaries.
@@ -136,6 +214,6 @@ To demonstrate that the architecture is genuinely modular, the following conditi
    - [`GenerationProvider`](contracts.md#7-generationprovider): OpenAI API ↔ Anthropic API
    - [`DocumentConverter`](contracts.md#2-documentconverter): Pandoc-based ↔ alternative converter
 
-3. **Dependency direction** — All dependencies point inward toward contracts, never between concrete implementations. A dependency diagram confirms that removing or replacing any single implementation leaves all other modules and contracts intact.
+3. **Dependency direction** — All dependencies point inward toward contracts, never between concrete implementations. [Diagram B](#diagram-b--dependency-direction) above visualises this, and `import-linter` enforces it as a build gate, so removing or replacing any single implementation leaves all other modules and contracts intact.
 
 4. **Configuration-driven binding** — Which concrete implementation is used for each contract is determined by configuration, not by hardcoded references. For application-level contracts (embedding, reranking, generation, chunking), binding is managed via [`ConfigProvider`](contracts.md#9-configprovider). For infrastructure-level contracts (vector store backend, source connectors, document converter, audit backend), binding is managed via `.env` and Docker Compose. In both cases, swapping a component means changing a config value and providing the implementation — not editing other modules. **All swaps require a service restart**; runtime hot-swapping is not a prototype goal.
