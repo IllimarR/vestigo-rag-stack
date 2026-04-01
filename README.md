@@ -31,6 +31,18 @@ The system exposes an **OpenAI Responses API-compatible endpoint**, enabling any
 
 ---
 
+## Modularity, enforced
+
+Modularity is the thesis claim, so the repo backs it with build-time gates rather than prose:
+
+- **Static dependency rules** — `.importlinter` (`uv run lint-imports`) forbids cross-service imports, contract-bypassing imports, and any backend driver leaking outside the service that owns it. A broken rule fails the build.
+- **Two real adapters per priority swap** — ChromaDB ↔ in-memory, sentence-transformers ↔ HTTP embed, cross-encoder ↔ LLM-as-reranker, OpenAI-compatible ↔ Anthropic generation, fixed-size ↔ recursive chunker. Walked through end-to-end in [Swap-Demo Evidence](docs/swap-demo.md).
+- **Parameterised contract-compliance suites** — each contract has one test file (`tests/test_*_contracts.py`) with a `_BACKENDS` / `_PROVIDERS` dict; every registered adapter runs the same body of tests, so adding a new adapter is one factory entry.
+
+`uv run lint-imports && uv run pytest tests/` runs all three. See [Architecture → Modularity Proof Criteria](docs/architecture.md#modularity-proof-criteria) for the underlying criteria.
+
+---
+
 ## What This Project Is
 
 - A **thesis prototype** proving architectural feasibility of modular, self-hosted RAG
